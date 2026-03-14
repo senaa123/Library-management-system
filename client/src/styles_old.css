@@ -1,0 +1,260 @@
+/*/* ==== GLOBAL RESET ==== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ==== NAVBAR ==== 
+nav {
+  padding: 12px 20px;
+  background-color: #1f6feb;
+  display: flex;
+  gap: 20px;
+}
+
+nav a {
+  color: white;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+*/
+/* ==== PAGE LAYOUT ==== 
+.page {
+  max-width: 500px;
+  margin: 40px auto;
+  padding: 20px;
+}*/
+
+/* Headings */
+.page h2 {
+  margin-bottom: 20px;
+}
+
+/* ==== FORM ==== 
+form input,
+form textarea {
+  padding: 10px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  width: 100%;
+}
+
+/* ==== BUTTONS ==== 
+  padding: 6px 12px;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+button:hover {
+  opacity: 0.85;
+}
+
+.btn-edit {
+  background-color: #f59f00;
+  color: white;
+}
+
+.btn-delete {
+  background-color: #e03131;
+  color: white;
+}
+
+.btn-submit {
+  background-color: #28a745;
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-submit:hover {
+  background-color: #218838;
+}
+
+/* Center form in Add/Edit 
+form {
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+
+/* Center table & style it 
+.book-table {
+  margin: 0 auto;
+  border-collapse: collapse;
+  width: 70%;
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Table cells 
+.book-table th,
+.book-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #eee;
+}
+
+/* Header style 
+.book-table th {
+  background-color: #f8f9fa;
+  font-weight: bold;
+}
+/* Book List Page Center + Title 
+.book-list-page {
+  max-width: 900px;
+  margin: 40px auto;
+  text-align: center;
+}
+
+/* Bigger, modern title 
+.book-list-page h2 {
+  margin-bottom: 25px;
+  font-size: 26px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Table Styling 
+.book-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+
+/* Header 
+.book-table th {
+  background-color: #f0f0f0;
+  padding: 14px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* Rows 
+.book-table td {
+  padding: 13px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+/* Hover Effect 
+.book-table tr:hover {
+  background-color: #fafafa;
+}
+/* === NAVBAR STYLING === 
+.navbar {
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  padding: 12px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Logo 
+.nav-logo {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f6feb;
+}
+
+/* Right side links 
+.nav-links {
+  display: flex;
+  gap: 20px;
+}
+
+/* Individual Nav Links 
+.nav-link {
+  text-decoration: none;
+  color: #444;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 4px;
+  transition: 0.2s;
+}
+
+.nav-link:hover {
+  background: #1f6feb;
+  color: white;
+}
+
+/* Active page highlight 
+.nav-link.active {
+  color: white;
+  background-color: #1f6feb;
+}
+.page form {
+  width: 400px;
+  max-width: 100%;
+}
+/* 🔎 Search Input 
+.search-input {
+  width: 50%;
+  padding: 10px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  margin-bottom: 18px;
+  font-size: 15px;
+}
+.search-input:focus {
+  border-color: #1f6feb;
+  outline: none;
+  box-shadow: 0 0 4px rgba(31, 111, 235, 0.5);
+}
+/* ====== GLASS LOGIN/REGISTER UI ====== *
+.auth-container {
+  width: 350px;
+  margin: 100px auto;
+  padding: 30px;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(15px);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  text-align: center;
+}
+
+.auth-container h2 {
+  margin-bottom: 20px;
+  color: #fff;
+}
+
+.auth-container input, .auth-container button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  outline: none;
+}
+
+.auth-container input {
+  background-color: rgba(255,255,255,0.8);
+}
+
+.auth-container button {
+  background-color: #1f6feb;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
+
+.auth-container button:hover {
+  background-color: #1557b0;
+}
