@@ -169,6 +169,7 @@ public sealed class UserService : IUserService
             user.FullName,
             user.Email,
             user.PhoneNumber,
+            user.QrCodeValue,
             user.Role.ToString(),
             user.IsActive,
             user.CreatedAt,

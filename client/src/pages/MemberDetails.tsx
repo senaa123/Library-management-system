@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import api from "../services/axiosConfig";
+import MemberQrCard from "../components/MemberQrCard";
 import { getStoredRole, isLoggedIn, isStaffRole } from "../lib/session";
+import api from "../services/axiosConfig";
 import type { Loan, UserProfile } from "../types/library";
 
 function MemberDetails() {
@@ -29,8 +30,8 @@ function MemberDetails() {
 
     // We load the profile and current loans together so the detail page opens with one staff action.
     Promise.all([
-      api.get(`/Users/${id}`),
-      api.get("/Loans", { params: { memberId: id, activeOnly: true } }),
+      api.get<UserProfile>(`/Users/${id}`),
+      api.get<Loan[]>("/Loans", { params: { memberId: id, activeOnly: true } }),
     ])
       .then(([memberResponse, loanResponse]) => {
         setMember(memberResponse.data);
@@ -91,6 +92,13 @@ function MemberDetails() {
           </div>
         </div>
       </div>
+
+      <MemberQrCard
+        fullName={member.fullName}
+        username={member.username}
+        qrCodeValue={member.qrCodeValue}
+        subtitle="Scan this member QR code when issuing a walk-in loan or completing a reservation pickup."
+      />
 
       <div className="rounded-3xl border border-white/60 bg-white/80 p-6 shadow-2xl backdrop-blur-xl">
         <h2 className="text-2xl font-bold text-slate-900">Current Borrowed Books</h2>

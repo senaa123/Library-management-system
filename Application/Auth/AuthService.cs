@@ -29,24 +29,25 @@ public sealed class AuthService : IAuthService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<OperationResult> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
+    public async Task<OperationResult<RegisterResponse>> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         {
-            return OperationResult.Failure("Username and Password are required", FailureType.Validation);
+            return OperationResult<RegisterResponse>.Failure("Username and Password are required", FailureType.Validation);
         }
 
         var username = request.Username.Trim();
         if (request.Password.Trim().Length < 6)
         {
-            return OperationResult.Failure("Password must be at least 6 characters long", FailureType.Validation);
+            return OperationResult<RegisterResponse>.Failure("Password must be at least 6 characters long", FailureType.Validation);
         }
 
         if (await _userRepository.ExistsByUsernameAsync(username, cancellationToken))
         {
-            return OperationResult.Failure("User already exists", FailureType.Conflict);
+            return OperationResult<RegisterResponse>.Failure("User already exists", FailureType.Conflict);
         }
 
+        var qrCodeValue = await GenerateQrCodeValueAsync(cancellationToken);
         var user = new User
         {
             Username = username,
@@ -54,6 +55,7 @@ public sealed class AuthService : IAuthService
             FullName = CleanOptional(request.FullName, username),
             Email = CleanOptional(request.Email),
             PhoneNumber = CleanOptional(request.PhoneNumber),
+            QrCodeValue = qrCodeValue,
             Role = UserRole.Member,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
@@ -71,7 +73,8 @@ public sealed class AuthService : IAuthService
             cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return OperationResult.Success("User Registered Successfully");
+        return OperationResult<RegisterResponse>.Success(
+            new RegisterResponse("User Registered Successfully", user.Id, user.Username, user.FullName, user.QrCodeValue));
     }
 
     public async Task<OperationResult<AuthResponse>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
@@ -100,9 +103,21 @@ public sealed class AuthService : IAuthService
         }
 
         var token = _jwtTokenService.GenerateToken(user.Id, user.Username, user.Role);
-        var response = new AuthResponse(user.Id, token, user.Username, user.FullName, user.Role.ToString());
+        var response = new AuthResponse(user.Id, token, user.Username, user.FullName, user.Role.ToString(), user.QrCodeValue);
 
         return OperationResult<AuthResponse>.Success(response);
+    }
+
+    private async Task<string> GenerateQrCodeValueAsync(CancellationToken cancellationToken)
+    {
+        string qrCodeValue;
+        do
+        {
+            qrCodeValue = $"LIBMEM-{Guid.NewGuid():N}";
+        }
+        while (await _userRepository.ExistsByQrCodeAsync(qrCodeValue, cancellationToken));
+
+        return qrCodeValue;
     }
 
     private static string CleanOptional(string? value, string? fallback = null)

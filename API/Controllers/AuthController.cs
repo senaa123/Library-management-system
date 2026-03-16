@@ -20,9 +20,9 @@ public class AuthController : ApiControllerBase
     public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken)
     {
         var result = await _authService.RegisterAsync(request, cancellationToken);
-        if (result.IsSuccess)
+        if (result.IsSuccess && result.Value is not null)
         {
-            return Ok(new { message = result.Message });
+            return Ok(result.Value);
         }
 
         return ToFailureResult(result);

@@ -52,9 +52,11 @@ public sealed class LibraryContext : DbContext
             builder.Property(user => user.FullName).IsRequired();
             builder.Property(user => user.Email).HasDefaultValue(string.Empty);
             builder.Property(user => user.PhoneNumber).HasDefaultValue(string.Empty);
+            builder.Property(user => user.QrCodeValue).IsRequired();
             builder.Property(user => user.Role).HasConversion<string>().IsRequired();
             builder.Property(user => user.IsActive).HasDefaultValue(true);
             builder.HasIndex(user => user.Username).IsUnique();
+            builder.HasIndex(user => user.QrCodeValue).IsUnique();
             builder.HasIndex(user => user.Role);
         });
 

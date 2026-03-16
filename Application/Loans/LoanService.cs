@@ -49,11 +49,60 @@ public sealed class LoanService : ILoanService
     }
 
     public Task<OperationResult<LoanDto>> BorrowAsync(BorrowBookRequest request, int memberUserId, CancellationToken cancellationToken = default) =>
-        IssueInternalAsync(request.BookId, memberUserId, request.BorrowDays, memberUserId, cancellationToken);
+        Task.FromResult(OperationResult<LoanDto>.Failure(
+            "Online borrowing is disabled. Please reserve the book and collect it from the library.",
+            FailureType.Conflict));
 
-    public async Task<OperationResult<LoanDto>> IssueAsync(IssueLoanRequest request, int issuedByUserId, CancellationToken cancellationToken = default)
+    public Task<OperationResult<LoanDto>> IssueAsync(IssueLoanRequest request, int issuedByUserId, CancellationToken cancellationToken = default) =>
+        IssueInternalAsync(request.BookId, request.MemberId, request.BorrowDays, issuedByUserId, null, consumeAvailableCopy: true, cancellationToken);
+
+    public async Task<OperationResult<LoanDto>> IssueByQrAsync(IssueLoanByQrRequest request, int issuedByUserId, CancellationToken cancellationToken = default)
     {
-        return await IssueInternalAsync(request.BookId, request.MemberId, request.BorrowDays, issuedByUserId, cancellationToken);
+        if (string.IsNullOrWhiteSpace(request.MemberQrCodeValue))
+        {
+            return OperationResult<LoanDto>.Failure("Member QR code is required", FailureType.Validation);
+        }
+
+        var member = await _userRepository.GetByQrCodeAsync(request.MemberQrCodeValue, cancellationToken);
+        if (member is null)
+        {
+            return OperationResult<LoanDto>.Failure("No member was found for the scanned QR code", FailureType.NotFound);
+        }
+
+        return await IssueInternalAsync(request.BookId, member.Id, request.BorrowDays, issuedByUserId, null, consumeAvailableCopy: true, cancellationToken);
+    }
+
+    public async Task<OperationResult<LoanDto>> IssueReservationAsync(int reservationId, int borrowDays, int issuedByUserId, CancellationToken cancellationToken = default)
+    {
+        var reservation = await _reservationRepository.GetByIdAsync(reservationId, cancellationToken);
+        if (reservation is null)
+        {
+            return OperationResult<LoanDto>.Failure("Reservation not found", FailureType.NotFound);
+        }
+
+        if (reservation.Status == ReservationStatus.Active)
+        {
+            return OperationResult<LoanDto>.Failure("This reservation is still waiting for a copy to become available", FailureType.Conflict);
+        }
+
+        if (reservation.Status == ReservationStatus.Cancelled)
+        {
+            return OperationResult<LoanDto>.Failure("This reservation has already been cancelled", FailureType.Conflict);
+        }
+
+        if (reservation.Status == ReservationStatus.Fulfilled)
+        {
+            return OperationResult<LoanDto>.Failure("This reservation has already been issued", FailureType.Conflict);
+        }
+
+        return await IssueInternalAsync(
+            reservation.BookId,
+            reservation.MemberId,
+            borrowDays,
+            issuedByUserId,
+            reservation,
+            consumeAvailableCopy: false,
+            cancellationToken);
     }
 
     private async Task<OperationResult<LoanDto>> IssueInternalAsync(
@@ -61,6 +110,8 @@ public sealed class LoanService : ILoanService
         int memberId,
         int borrowDays,
         int issuedByUserId,
+        Reservation? reservation,
+        bool consumeAvailableCopy,
         CancellationToken cancellationToken)
     {
         if (bookId <= 0 || memberId <= 0)
@@ -73,18 +124,37 @@ public sealed class LoanService : ILoanService
             return OperationResult<LoanDto>.Failure($"Borrow period must be between 1 and {_librarySettings.LoanPeriodDays} days", FailureType.Validation);
         }
 
-        var book = await _bookRepository.GetByIdAsync(bookId, cancellationToken);
+        var issuedAt = DateTime.UtcNow;
+        var book = reservation?.Book ?? await _bookRepository.GetByIdAsync(bookId, cancellationToken);
         if (book is null || !book.IsActive)
         {
             return OperationResult<LoanDto>.Failure("Book not found", FailureType.NotFound);
         }
 
-        if (book.AvailableCopies <= 0)
+        if (consumeAvailableCopy)
         {
-            return OperationResult<LoanDto>.Failure("No copies are currently available", FailureType.Conflict);
+            var promotedReservations = await PromoteQueuedReservationsAsync(book, issuedByUserId, issuedAt, cancellationToken);
+
+            if (book.AvailableCopies <= 0)
+            {
+                if (promotedReservations > 0)
+                {
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    return OperationResult<LoanDto>.Failure("This book is currently reserved for pickup", FailureType.Conflict);
+                }
+
+                var blockingReservation = await _reservationRepository.GetNextActiveReservationAsync(book.Id, cancellationToken);
+                return blockingReservation?.Status == ReservationStatus.Available
+                    ? OperationResult<LoanDto>.Failure("This book is currently reserved for pickup", FailureType.Conflict)
+                    : OperationResult<LoanDto>.Failure("No copies are currently available", FailureType.Conflict);
+            }
+        }
+        else if (reservation?.Status != ReservationStatus.Available)
+        {
+            return OperationResult<LoanDto>.Failure("This reservation is not ready for issue", FailureType.Conflict);
         }
 
-        var member = await _userRepository.GetByIdAsync(memberId, cancellationToken);
+        var member = reservation?.Member ?? await _userRepository.GetByIdAsync(memberId, cancellationToken);
         if (member is null || member.Role != UserRole.Member)
         {
             return OperationResult<LoanDto>.Failure("Member account not found", FailureType.NotFound);
@@ -101,19 +171,21 @@ public sealed class LoanService : ILoanService
             return OperationResult<LoanDto>.Failure($"A member can only borrow {_librarySettings.MaxConcurrentLoans} different books at a time", FailureType.Conflict);
         }
 
-        var existingLoan = await _loanRepository.GetActiveLoanAsync(bookId, memberId, cancellationToken);
+        var existingLoan = await _loanRepository.GetActiveLoanAsync(book.Id, member.Id, cancellationToken);
         if (existingLoan is not null)
         {
             return OperationResult<LoanDto>.Failure("This member already has an active loan for the selected book", FailureType.Conflict);
         }
 
-        var queuedReservation = await _reservationRepository.GetNextActiveReservationAsync(bookId, cancellationToken);
-        if (queuedReservation is not null && queuedReservation.MemberId != memberId)
+        if (reservation is null)
         {
-            return OperationResult<LoanDto>.Failure("This book is reserved for another member", FailureType.Conflict);
+            var existingReservation = await _reservationRepository.GetActiveReservationAsync(book.Id, member.Id, cancellationToken);
+            if (existingReservation is not null)
+            {
+                return OperationResult<LoanDto>.Failure("This member already has a reservation for the selected book", FailureType.Conflict);
+            }
         }
 
-        var issuedAt = DateTime.UtcNow;
         var loan = new Loan
         {
             BookId = book.Id,
@@ -127,12 +199,15 @@ public sealed class LoanService : ILoanService
             Status = LoanStatus.Active
         };
 
-        book.AvailableCopies -= 1;
-
-        if (queuedReservation is not null && queuedReservation.MemberId == memberId)
+        if (consumeAvailableCopy)
         {
-            queuedReservation.Status = ReservationStatus.Fulfilled;
-            queuedReservation.FulfilledAt = issuedAt;
+            book.AvailableCopies -= 1;
+        }
+
+        if (reservation is not null)
+        {
+            reservation.Status = ReservationStatus.Fulfilled;
+            reservation.FulfilledAt = issuedAt;
         }
 
         await _loanRepository.AddAsync(loan, cancellationToken);
@@ -144,7 +219,10 @@ public sealed class LoanService : ILoanService
                 UserId = member.Id,
                 PerformedById = issuedByUserId,
                 Loan = loan,
-                Details = $"Book '{book.Title}' was issued to '{member.Username}'."
+                ReservationId = reservation?.Id,
+                Details = reservation is null
+                    ? $"Book '{book.Title}' was issued to '{member.Username}' after QR verification."
+                    : $"Reserved book '{book.Title}' was issued to '{member.Username}'."
             },
             cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -175,6 +253,9 @@ public sealed class LoanService : ILoanService
         loan.ReturnedAt = returnedAt;
         loan.Book.AvailableCopies = Math.Min(loan.Book.TotalCopies, loan.Book.AvailableCopies + 1);
 
+        // When a copy comes back, we immediately hold it for the next queued reservation before exposing it as free stock.
+        await PromoteQueuedReservationsAsync(loan.Book, returnedByUserId, returnedAt, cancellationToken);
+
         await _transactionRepository.AddAsync(
             new TransactionRecord
             {
@@ -186,26 +267,6 @@ public sealed class LoanService : ILoanService
                 Details = $"Book '{loan.Book.Title}' was returned by '{loan.Borrower?.Username ?? "member"}'."
             },
             cancellationToken);
-
-        var nextReservation = await _reservationRepository.GetNextActiveReservationAsync(loan.BookId, cancellationToken);
-        if (nextReservation is not null && nextReservation.Status == ReservationStatus.Active)
-        {
-            nextReservation.Status = ReservationStatus.Available;
-            nextReservation.NotifiedAt = returnedAt;
-
-            await _transactionRepository.AddAsync(
-                new TransactionRecord
-                {
-                    Type = TransactionType.ReservationAvailable,
-                    BookId = nextReservation.BookId,
-                    UserId = nextReservation.MemberId,
-                    PerformedById = returnedByUserId,
-                    ReservationId = nextReservation.Id,
-                    Details = $"Reserved book '{loan.Book.Title}' is now available for member '{nextReservation.Member?.Username ?? nextReservation.MemberId.ToString()}'."
-                },
-                cancellationToken);
-        }
-
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return OperationResult<LoanDto>.Success(Map(loan));
@@ -261,6 +322,39 @@ public sealed class LoanService : ILoanService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return OperationResult<LoanDto>.Success(Map(loan));
+    }
+
+    private async Task<int> PromoteQueuedReservationsAsync(Book book, int? performedByUserId, DateTime currentTime, CancellationToken cancellationToken)
+    {
+        var promotedCount = 0;
+
+        while (book.AvailableCopies > 0)
+        {
+            var nextQueuedReservation = await _reservationRepository.GetNextQueuedReservationAsync(book.Id, cancellationToken);
+            if (nextQueuedReservation is null)
+            {
+                break;
+            }
+
+            nextQueuedReservation.Status = ReservationStatus.Available;
+            nextQueuedReservation.NotifiedAt = currentTime;
+            book.AvailableCopies -= 1;
+
+            await _transactionRepository.AddAsync(
+                new TransactionRecord
+                {
+                    Type = TransactionType.ReservationAvailable,
+                    BookId = nextQueuedReservation.BookId,
+                    UserId = nextQueuedReservation.MemberId,
+                    PerformedById = performedByUserId,
+                    ReservationId = nextQueuedReservation.Id,
+                    Details = $"Reservation #{nextQueuedReservation.Id} is ready for pickup."
+                },
+                cancellationToken);
+            promotedCount++;
+        }
+
+        return promotedCount;
     }
 
     private LoanDto Map(Loan loan)

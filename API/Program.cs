@@ -13,6 +13,7 @@ using LibraryM.Infrastructure.Authentication;
 using LibraryM.Infrastructure.Persistence;
 using LibraryM.Infrastructure.Persistence.Repositories;
 using LibraryM.Infrastructure.Security;
+using LibraryM.WebApi.HostedServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -57,6 +58,7 @@ builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IFineService, FineService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<LibraryDatabaseInitializer>();
+builder.Services.AddHostedService<ReservationExpiryBackgroundService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>

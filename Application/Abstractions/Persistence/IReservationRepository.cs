@@ -11,6 +11,10 @@ public interface IReservationRepository
 
     Task<Reservation?> GetNextActiveReservationAsync(int bookId, CancellationToken cancellationToken = default);
 
+    Task<Reservation?> GetNextQueuedReservationAsync(int bookId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Reservation>> GetExpiredReadyReservationsAsync(DateTime expiresBeforeUtc, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Reservation>> GetReservationsAsync(int? memberId, ReservationStatus? status, CancellationToken cancellationToken = default);
 
     Task AddAsync(Reservation reservation, CancellationToken cancellationToken = default);

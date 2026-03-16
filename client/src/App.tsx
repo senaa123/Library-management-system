@@ -1,44 +1,26 @@
 import { Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
 import BookList from "./pages/BookList";
 import AddBook from "./pages/AddBook";
 import EditBook from "./pages/EditBook";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyBorrowedBooks from "./pages/MyBorrowedBooks";
+import MyReservations from "./pages/MyReservations";
 import AdminLoans from "./pages/AdminLoans";
+import AdminReservations from "./pages/AdminReservations";
+import StaffBookSection from "./pages/StaffBookSection";
 import Members from "./pages/Members";
 import MemberDetails from "./pages/MemberDetails";
 import { getStoredRole, isLoggedIn, isStaffRole } from "./lib/session";
 
 function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [role, setRole] = useState("");
-
   const navigate = useNavigate();
   const location = useLocation();
+  const loggedIn = isLoggedIn();
+  const username = localStorage.getItem("username") ?? "";
+  const role = getStoredRole();
+  const displayName = localStorage.getItem("fullName") ?? username;
   const isStaff = isStaffRole(role);
-
-  useEffect(() => {
-    if (isLoggedIn()) {
-      const user = localStorage.getItem("username") ?? "";
-      const storedRole = getStoredRole();
-      const storedFullName = localStorage.getItem("fullName") ?? user;
-
-      setLoggedIn(true);
-      setUsername(user);
-      setRole(storedRole);
-      setDisplayName(storedFullName);
-      return;
-    }
-
-    setLoggedIn(false);
-    setUsername("");
-    setRole("");
-    setDisplayName("");
-  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -46,11 +28,7 @@ function App() {
     localStorage.removeItem("role");
     localStorage.removeItem("userId");
     localStorage.removeItem("fullName");
-
-    setLoggedIn(false);
-    setUsername("");
-    setDisplayName("");
-    setRole("");
+    localStorage.removeItem("qrCodeValue");
     navigate("/login");
   };
 
@@ -75,7 +53,18 @@ function App() {
               Catalog
             </Link>
 
-            {loggedIn && (
+            {loggedIn && !isStaff && (
+              <Link
+                to="/reservations"
+                className={`rounded-xl px-4 py-2 font-medium transition ${
+                  location.pathname === "/reservations" ? "bg-white text-slate-900" : "text-slate-200 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                My Reservations
+              </Link>
+            )}
+
+            {loggedIn && !isStaff && (
               <Link
                 to="/borrowed"
                 className={`rounded-xl px-4 py-2 font-medium transition ${
@@ -88,6 +77,22 @@ function App() {
 
             {loggedIn && isStaff && (
               <>
+                <Link
+                  to="/staff/books"
+                  className={`rounded-xl px-4 py-2 font-medium transition ${
+                    location.pathname.startsWith("/staff/books") ? "bg-white text-slate-900" : "text-slate-200 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  Book Section
+                </Link>
+                <Link
+                  to="/staff/reservations"
+                  className={`rounded-xl px-4 py-2 font-medium transition ${
+                    location.pathname.startsWith("/staff/reservations") ? "bg-white text-slate-900" : "text-slate-200 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  Reserved
+                </Link>
                 <Link
                   to="/staff/loans"
                   className={`rounded-xl px-4 py-2 font-medium transition ${
@@ -160,7 +165,10 @@ function App() {
             <Route path="/" element={<BookList />} />
             <Route path="/add" element={<AddBook />} />
             <Route path="/edit/:id" element={<EditBook />} />
+            <Route path="/reservations" element={<MyReservations />} />
             <Route path="/borrowed" element={<MyBorrowedBooks />} />
+            <Route path="/staff/books" element={<StaffBookSection />} />
+            <Route path="/staff/reservations" element={<AdminReservations />} />
             <Route path="/staff/loans" element={<AdminLoans />} />
             <Route path="/members" element={<Members />} />
             <Route path="/members/:id" element={<MemberDetails />} />
@@ -168,11 +176,7 @@ function App() {
               path="/login"
               element={
                 <Login
-                  onLogin={(user, nextRole, fullName) => {
-                    setLoggedIn(true);
-                    setUsername(user);
-                    setRole(nextRole);
-                    setDisplayName(fullName || user);
+                  onLogin={() => {
                   }}
                 />
               }

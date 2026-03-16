@@ -13,6 +13,23 @@ export interface Book {
   availabilityStatus: string;
 }
 
+export interface AuthResponse {
+  userId: number;
+  token: string;
+  username: string;
+  fullName: string;
+  role: string;
+  qrCodeValue: string;
+}
+
+export interface RegisterResponse {
+  message: string;
+  userId: number;
+  username: string;
+  fullName: string;
+  qrCodeValue: string;
+}
+
 export interface Loan {
   id: number;
   bookId: number;
@@ -35,12 +52,32 @@ export interface Loan {
   timeLeftLabel: string;
 }
 
+export interface Reservation {
+  id: number;
+  bookId: number;
+  bookTitle: string;
+  memberId: number;
+  memberName: string;
+  memberUsername: string;
+  memberPhoneNumber: string;
+  reservedAt: string;
+  notifiedAt?: string | null;
+  cancelledAt?: string | null;
+  fulfilledAt?: string | null;
+  pickupDeadline?: string | null;
+  daysLeft: number;
+  timeLeftLabel: string;
+  canIssue: boolean;
+  status: string;
+}
+
 export interface UserProfile {
   id: number;
   username: string;
   fullName: string;
   email: string;
   phoneNumber: string;
+  qrCodeValue: string;
   role: string;
   isActive: boolean;
   createdAt: string;

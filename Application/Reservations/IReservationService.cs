@@ -11,4 +11,6 @@ public interface IReservationService
     Task<OperationResult<ReservationDto>> CreateAsync(CreateReservationRequest request, int requesterUserId, UserRole requesterRole, CancellationToken cancellationToken = default);
 
     Task<OperationResult<ReservationDto>> CancelAsync(int reservationId, int requesterUserId, UserRole requesterRole, CancellationToken cancellationToken = default);
+
+    Task<int> ExpireExpiredAsync(CancellationToken cancellationToken = default);
 }

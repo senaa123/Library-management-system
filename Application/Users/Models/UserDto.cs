@@ -6,6 +6,7 @@ public sealed record UserDto(
     string FullName,
     string Email,
     string PhoneNumber,
+    string QrCodeValue,
     string Role,
     bool IsActive,
     DateTime CreatedAt,

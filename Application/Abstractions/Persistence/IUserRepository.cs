@@ -7,7 +7,11 @@ public interface IUserRepository
 {
     Task<bool> ExistsByUsernameAsync(string username, CancellationToken cancellationToken = default);
 
+    Task<bool> ExistsByQrCodeAsync(string qrCodeValue, CancellationToken cancellationToken = default);
+
     Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default);
+
+    Task<User?> GetByQrCodeAsync(string qrCodeValue, CancellationToken cancellationToken = default);
 
     Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default);
 

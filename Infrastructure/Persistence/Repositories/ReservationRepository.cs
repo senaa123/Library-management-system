@@ -34,6 +34,22 @@ public sealed class ReservationRepository : IReservationRepository
             .ThenBy(reservation => reservation.ReservedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public Task<Reservation?> GetNextQueuedReservationAsync(int bookId, CancellationToken cancellationToken = default) =>
+        BaseQuery()
+            .Where(reservation => reservation.BookId == bookId && reservation.Status == ReservationStatus.Active)
+            .OrderBy(reservation => reservation.ReservedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Reservation>> GetExpiredReadyReservationsAsync(DateTime expiresBeforeUtc, CancellationToken cancellationToken = default)
+    {
+        return await BaseQuery()
+            .Where(reservation =>
+                reservation.Status == ReservationStatus.Available &&
+                (reservation.NotifiedAt ?? reservation.ReservedAt) <= expiresBeforeUtc)
+            .OrderBy(reservation => reservation.NotifiedAt ?? reservation.ReservedAt)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Reservation>> GetReservationsAsync(int? memberId, ReservationStatus? status, CancellationToken cancellationToken = default)
     {
         var query = BaseQuery();
@@ -49,7 +65,8 @@ public sealed class ReservationRepository : IReservationRepository
         }
 
         return await query
-            .OrderByDescending(reservation => reservation.ReservedAt)
+            .OrderBy(reservation => reservation.Status == ReservationStatus.Available ? 0 : reservation.Status == ReservationStatus.Active ? 1 : 2)
+            .ThenByDescending(reservation => reservation.NotifiedAt ?? reservation.ReservedAt)
             .ToListAsync(cancellationToken);
     }
 

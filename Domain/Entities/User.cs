@@ -16,6 +16,8 @@ public class User
 
     public string PhoneNumber { get; set; } = string.Empty;
 
+    public string QrCodeValue { get; set; } = string.Empty;
+
     public UserRole Role { get; set; } = UserRole.Member;
 
     public bool IsActive { get; set; } = true;

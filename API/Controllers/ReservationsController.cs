@@ -1,5 +1,6 @@
 using LibraryM.Application.Reservations;
 using LibraryM.Application.Reservations.Models;
+using LibraryM.Application.Loans;
 using LibraryM.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,10 +13,12 @@ namespace LibraryM.WebApi.Controllers;
 public class ReservationsController : ApiControllerBase
 {
     private readonly IReservationService _reservationService;
+    private readonly ILoanService _loanService;
 
-    public ReservationsController(IReservationService reservationService)
+    public ReservationsController(IReservationService reservationService, ILoanService loanService)
     {
         _reservationService = reservationService;
+        _loanService = loanService;
     }
 
     [HttpGet]
@@ -25,6 +28,7 @@ public class ReservationsController : ApiControllerBase
         return Ok(reservations);
     }
 
+    [Authorize(Roles = "Member")]
     [HttpPost]
     public async Task<IActionResult> CreateReservation([FromBody] CreateReservationRequest request, CancellationToken cancellationToken)
     {
@@ -41,6 +45,14 @@ public class ReservationsController : ApiControllerBase
     public async Task<IActionResult> CancelReservation(int id, CancellationToken cancellationToken)
     {
         var result = await _reservationService.CancelAsync(id, GetCurrentUserId(), GetCurrentUserRole(), cancellationToken);
+        return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
+    }
+
+    [Authorize(Policy = "StaffOnly")]
+    [HttpPost("{id:int}/issue")]
+    public async Task<IActionResult> IssueReservation(int id, [FromBody] IssueReservationRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _loanService.IssueReservationAsync(id, request.BorrowDays, GetCurrentUserId(), cancellationToken);
         return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
     }
 }

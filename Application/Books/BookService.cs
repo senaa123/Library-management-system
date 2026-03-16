@@ -96,22 +96,23 @@ public sealed class BookService : IBookService
             return OperationResult.Failure("Book not found", FailureType.NotFound);
         }
 
-        var borrowedCopies = Math.Max(0, book.TotalCopies - book.AvailableCopies);
+        // Unavailable copies include both active loans and copies currently being held for reservations.
+        var unavailableCopies = Math.Max(0, book.TotalCopies - book.AvailableCopies);
         var totalCopies = request.TotalCopies ?? book.TotalCopies;
-        if (totalCopies < 1 || totalCopies < borrowedCopies)
+        if (totalCopies < 1 || totalCopies < unavailableCopies)
         {
-            return OperationResult.Failure("Total copies cannot be less than the number of issued copies", FailureType.Validation);
+            return OperationResult.Failure("Total copies cannot be less than the number of issued or reserved copies", FailureType.Validation);
         }
 
-        var availableCopies = request.AvailableCopies ?? Math.Max(0, totalCopies - borrowedCopies);
+        var availableCopies = request.AvailableCopies ?? Math.Max(0, totalCopies - unavailableCopies);
         if (availableCopies < 0 || availableCopies > totalCopies)
         {
             return OperationResult.Failure("Available copies are invalid", FailureType.Validation);
         }
 
-        if (totalCopies - availableCopies < borrowedCopies)
+        if (totalCopies - availableCopies < unavailableCopies)
         {
-            return OperationResult.Failure("Available copies cannot conflict with active loans", FailureType.Validation);
+            return OperationResult.Failure("Available copies cannot conflict with active loans or held reservations", FailureType.Validation);
         }
 
         book.Title = request.Title.Trim();
@@ -145,14 +146,14 @@ public sealed class BookService : IBookService
             return OperationResult.Failure("Book not found", FailureType.NotFound);
         }
 
-        var borrowedCopies = Math.Max(0, book.TotalCopies - book.AvailableCopies);
+        var unavailableCopies = Math.Max(0, book.TotalCopies - book.AvailableCopies);
 
         if (request.RemoveAllCopies)
         {
-            // We only allow removing the whole title when nothing is still out with members.
-            if (borrowedCopies > 0)
+            // We only allow removing the whole title when no copy is on loan or held for pickup.
+            if (unavailableCopies > 0)
             {
-                return OperationResult.Failure("All copies cannot be removed while some copies are still borrowed", FailureType.Conflict);
+                return OperationResult.Failure("All copies cannot be removed while some copies are still issued or reserved", FailureType.Conflict);
             }
 
             book.TotalCopies = 0;

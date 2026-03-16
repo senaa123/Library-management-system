@@ -20,10 +20,22 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.AnyAsync(user => user.Username.ToLower() == normalizedUsername, cancellationToken);
     }
 
+    public Task<bool> ExistsByQrCodeAsync(string qrCodeValue, CancellationToken cancellationToken = default)
+    {
+        var normalizedQrCode = Normalize(qrCodeValue);
+        return _dbContext.Users.AnyAsync(user => user.QrCodeValue.ToLower() == normalizedQrCode, cancellationToken);
+    }
+
     public Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
     {
         var normalizedUsername = Normalize(username);
         return _dbContext.Users.FirstOrDefaultAsync(user => user.Username.ToLower() == normalizedUsername, cancellationToken);
+    }
+
+    public Task<User?> GetByQrCodeAsync(string qrCodeValue, CancellationToken cancellationToken = default)
+    {
+        var normalizedQrCode = Normalize(qrCodeValue);
+        return _dbContext.Users.FirstOrDefaultAsync(user => user.QrCodeValue.ToLower() == normalizedQrCode, cancellationToken);
     }
 
     public Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default) =>

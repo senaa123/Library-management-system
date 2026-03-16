@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { getStoredRole, isLoggedIn, isMemberRole } from "../lib/session";
 import api from "../services/axiosConfig";
-import { isLoggedIn } from "../lib/session";
 import type { Loan } from "../types/library";
 
 function MyBorrowedBooks() {
@@ -15,8 +15,13 @@ function MyBorrowedBooks() {
       return;
     }
 
+    if (!isMemberRole(getStoredRole())) {
+      navigate("/");
+      return;
+    }
+
     // Members only get their own active loans from this endpoint.
-    api.get("/Loans", { params: { activeOnly: true } })
+    api.get<Loan[]>("/Loans", { params: { activeOnly: true } })
       .then((response) => setLoans(response.data))
       .catch((error) => {
         alert(error.response?.data?.message ?? "Failed to load borrowed books.");
@@ -32,7 +37,7 @@ function MyBorrowedBooks() {
             <p className="text-sm uppercase tracking-[0.3em] text-indigo-500">Borrowed Section</p>
             <h1 className="mt-2 text-3xl font-bold text-slate-900">My Borrowed Books</h1>
             <p className="mt-2 text-slate-600">
-              Track what you currently have and how long is left before each return.
+              Track the books that have already been issued to you by a librarian and see how long is left before each return.
             </p>
           </div>
           <div className="rounded-2xl bg-slate-900 px-5 py-4 text-white shadow-lg">
@@ -48,12 +53,12 @@ function MyBorrowedBooks() {
         ) : loans.length === 0 ? (
           <div className="py-10 text-center">
             <p className="text-lg font-semibold text-slate-700">No borrowed books right now.</p>
-            <p className="mt-2 text-slate-500">You can borrow available books directly from the catalog.</p>
+            <p className="mt-2 text-slate-500">Reserve a title online first, then collect it at the library desk for issuance.</p>
             <Link
-              to="/"
+              to="/reservations"
               className="mt-6 inline-flex rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-lg transition hover:bg-indigo-700"
             >
-              Browse catalog
+              View my reservations
             </Link>
           </div>
         ) : (

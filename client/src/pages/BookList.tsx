@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import api from "../services/axiosConfig";
 import { getStoredRole, isLoggedIn, isMemberRole, isStaffRole } from "../lib/session";
-import type { Book } from "../types/library";
+import api from "../services/axiosConfig";
+import type { Book, Reservation } from "../types/library";
 
 type RemoveMode = "all" | "copies";
 
@@ -10,34 +10,23 @@ function BookList() {
   const [books, setBooks] = useState<Book[]>([]);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [username, setUsername] = useState<string | null>("");
-  const [role, setRole] = useState<string>(getStoredRole());
-
-  // These small dialog states let us keep the catalog page as the single workflow hub.
   const [bookToRemove, setBookToRemove] = useState<Book | null>(null);
   const [removeMode, setRemoveMode] = useState<RemoveMode>("copies");
   const [removeQuantity, setRemoveQuantity] = useState(1);
-  const [bookToBorrow, setBookToBorrow] = useState<Book | null>(null);
-  const [borrowDays, setBorrowDays] = useState(14);
+  const [bookToReserve, setBookToReserve] = useState<Book | null>(null);
+  const username = localStorage.getItem("username");
+  const role = getStoredRole();
 
   const isStaff = isStaffRole(role);
   const isMember = isMemberRole(role);
 
   const loadBooks = () => {
-    api.get("/Books")
+    api.get<Book[]>("/Books")
       .then((response) => setBooks(response.data))
-      .catch((error) => alert(error.response?.data?.message ?? "Error fetching books!"));
+      .catch((error) => alert(error.response?.data?.message ?? "Error fetching books."));
   };
 
   useEffect(() => {
-    const user = localStorage.getItem("username");
-    const storedRole = getStoredRole();
-
-    if (user) {
-      setUsername(user);
-    }
-
-    setRole(storedRole);
     loadBooks();
   }, []);
 
@@ -45,7 +34,7 @@ function BookList() {
     (book.title.toLowerCase().includes(search.toLowerCase()) ||
       book.author.toLowerCase().includes(search.toLowerCase()) ||
       book.isbn.toLowerCase().includes(search.toLowerCase())) &&
-    (categoryFilter === "" || book.category === categoryFilter)
+    (categoryFilter === "" || book.category === categoryFilter),
   );
 
   const submitRemove = () => {
@@ -70,20 +59,23 @@ function BookList() {
       });
   };
 
-  const submitBorrow = () => {
-    if (!bookToBorrow) {
+  const submitReservation = () => {
+    if (!bookToReserve) {
       return;
     }
 
-    api.post("/Loans/borrow", { bookId: bookToBorrow.id, borrowDays })
-      .then(() => {
-        alert("Book borrowed successfully.");
-        setBookToBorrow(null);
-        setBorrowDays(14);
+    api.post<Reservation>("/Reservations", { bookId: bookToReserve.id })
+      .then((response) => {
+        const message = response.data.status === "Available"
+          ? "Reservation placed. A copy is now held for pickup for 5 days."
+          : "Reservation placed. You have been added to the waiting queue.";
+
+        alert(message);
+        setBookToReserve(null);
         loadBooks();
       })
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to borrow this book.");
+        alert(error.response?.data?.message ?? "Failed to reserve this book.");
       });
   };
 
@@ -95,7 +87,7 @@ function BookList() {
             <p className="text-sm uppercase tracking-[0.3em] text-indigo-500">Library Catalog</p>
             <h1 className="mt-2 text-3xl font-bold text-slate-900">Browse Books</h1>
             <p className="mt-3 max-w-2xl text-slate-600">
-              Search the collection, check current status, and borrow available books online when you are logged in as a member.
+              Search the collection, check live library status, and place reservations online. Loans start only when a librarian issues the book at the desk.
             </p>
           </div>
 
@@ -197,14 +189,10 @@ function BookList() {
 
                       {isMember && (
                         <button
-                          onClick={() => {
-                            setBookToBorrow(book);
-                            setBorrowDays(14);
-                          }}
-                          disabled={book.availableCopies === 0}
-                          className="rounded-xl bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          onClick={() => setBookToReserve(book)}
+                          className="rounded-xl bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-700"
                         >
-                          Borrow
+                          Reserve
                         </button>
                       )}
                     </div>
@@ -253,7 +241,7 @@ function BookList() {
                 <div>
                   <p className="font-semibold text-slate-900">Remove all copies under this title</p>
                   <p className="text-sm text-slate-500">
-                    This works only when no copy is currently borrowed by a member.
+                    This works only when no copy is currently borrowed or held for reservation.
                   </p>
                 </div>
               </label>
@@ -294,42 +282,31 @@ function BookList() {
         </div>
       )}
 
-      {bookToBorrow && (
+      {bookToReserve && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
           <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl">
-            <p className="text-sm uppercase tracking-[0.3em] text-indigo-500">Borrow Online</p>
-            <h2 className="mt-2 text-2xl font-bold text-slate-900">{bookToBorrow.title}</h2>
+            <p className="text-sm uppercase tracking-[0.3em] text-indigo-500">Reserve Book</p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-900">{bookToReserve.title}</h2>
             <p className="mt-2 text-slate-600">
-              Select how long you want to borrow this book. The maximum online borrow period is two weeks.
+              Reserve this title online. If a copy is available right now, the library will hold it for pickup for up to 5 days. If not, you will join the waiting queue.
             </p>
 
-            <div className="mt-6">
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Borrow period</label>
-              <select
-                value={borrowDays}
-                onChange={(event) => setBorrowDays(Number(event.target.value))}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {Array.from({ length: 14 }, (_, index) => index + 1).map((days) => (
-                  <option key={days} value={days}>
-                    {days} {days === 1 ? "day" : "days"}
-                  </option>
-                ))}
-              </select>
+            <div className="mt-6 rounded-2xl bg-indigo-50 p-4 text-sm text-indigo-900 ring-1 ring-indigo-100">
+              The due timer does not start until a librarian issues the book to you in person.
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
               <button
-                onClick={() => setBookToBorrow(null)}
+                onClick={() => setBookToReserve(null)}
                 className="rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
-                onClick={submitBorrow}
+                onClick={submitReservation}
                 className="rounded-xl bg-indigo-600 px-5 py-2 font-semibold text-white transition hover:bg-indigo-700"
               >
-                Confirm borrow
+                Confirm reservation
               </button>
             </div>
           </div>

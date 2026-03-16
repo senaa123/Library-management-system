@@ -14,5 +14,6 @@ public enum TransactionType
     ReservationPlaced = 10,
     ReservationCancelled = 11,
     ReservationAvailable = 12,
-    FinePayment = 13
+    FinePayment = 13,
+    ReservationExpired = 14
 }

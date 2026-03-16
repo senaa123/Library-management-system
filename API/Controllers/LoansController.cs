@@ -37,6 +37,14 @@ public class LoansController : ApiControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(Policy = "StaffOnly")]
+    [HttpPost("issue-by-qr")]
+    public async Task<IActionResult> IssueLoanByQr([FromBody] IssueLoanByQrRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _loanService.IssueByQrAsync(request, GetCurrentUserId(), cancellationToken);
+        return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
+    }
+
     [Authorize(Roles = "Member")]
     [HttpPost("borrow")]
     public async Task<IActionResult> BorrowBook([FromBody] BorrowBookRequest request, CancellationToken cancellationToken)

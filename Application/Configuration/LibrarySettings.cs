@@ -8,6 +8,8 @@ public sealed class LibrarySettings
 
     public int MaxConcurrentLoans { get; set; } = 5;
 
+    public int ReservationHoldDays { get; set; } = 5;
+
     public int RenewalDays { get; set; } = 7;
 
     public int MaxRenewals { get; set; } = 2;

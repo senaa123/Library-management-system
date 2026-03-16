@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../services/axiosConfig";
 import { getStoredRole, isLoggedIn, isStaffRole } from "../lib/session";
+import api from "../services/axiosConfig";
 import type { UserProfile } from "../types/library";
 
 function Members() {
@@ -21,7 +21,7 @@ function Members() {
     }
 
     // This screen is the staff directory for active members only.
-    api.get("/Users", { params: { role: "Member", isActive: true } })
+    api.get<UserProfile[]>("/Users", { params: { role: "Member", isActive: true } })
       .then((response) => setMembers(response.data))
       .catch((error) => {
         alert(error.response?.data?.message ?? "Failed to load current members.");
@@ -35,7 +35,7 @@ function Members() {
         <p className="text-sm uppercase tracking-[0.3em] text-indigo-500">Admin Section</p>
         <h1 className="mt-2 text-3xl font-bold text-slate-900">Current Members</h1>
         <p className="mt-2 text-slate-600">
-          Select a member to view their details and current borrowed books.
+          Select a member to view their details, QR code, and current borrowed books.
         </p>
       </div>
 

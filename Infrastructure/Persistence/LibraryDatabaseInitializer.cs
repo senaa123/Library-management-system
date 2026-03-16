@@ -32,6 +32,7 @@ public sealed class LibraryDatabaseInitializer
         await EnsureFinePaymentsTableAsync(cancellationToken);
         await EnsureTransactionRecordsTableAsync(cancellationToken);
         await NormalizeLegacyDataAsync(cancellationToken);
+        await EnsureUserIndexesAsync(cancellationToken);
         await SeedDefaultAdminAsync(cancellationToken);
     }
 
@@ -54,11 +55,16 @@ public sealed class LibraryDatabaseInitializer
         await EnsureColumnAsync("Users", "FullName", "TEXT NOT NULL DEFAULT ''", cancellationToken);
         await EnsureColumnAsync("Users", "Email", "TEXT NOT NULL DEFAULT ''", cancellationToken);
         await EnsureColumnAsync("Users", "PhoneNumber", "TEXT NOT NULL DEFAULT ''", cancellationToken);
+        await EnsureColumnAsync("Users", "QrCodeValue", "TEXT NULL", cancellationToken);
         await EnsureColumnAsync("Users", "IsActive", "INTEGER NOT NULL DEFAULT 1", cancellationToken);
         await EnsureColumnAsync("Users", "CreatedAt", "TEXT NULL", cancellationToken);
         await EnsureColumnAsync("Users", "UpdatedAt", "TEXT NULL", cancellationToken);
+    }
 
+    private async Task EnsureUserIndexesAsync(CancellationToken cancellationToken)
+    {
         await ExecuteSqlAsync("CREATE INDEX IF NOT EXISTS IX_Users_Role ON Users(Role);", cancellationToken);
+        await ExecuteSqlAsync("CREATE UNIQUE INDEX IF NOT EXISTS IX_Users_QrCodeValue ON Users(QrCodeValue);", cancellationToken);
     }
 
     private async Task EnsureLoansTableAsync(CancellationToken cancellationToken)
@@ -168,6 +174,7 @@ public sealed class LibraryDatabaseInitializer
         await ExecuteSqlAsync("UPDATE Users SET FullName = Username WHERE FullName IS NULL OR TRIM(FullName) = '';", cancellationToken);
         await ExecuteSqlAsync("UPDATE Users SET Email = '' WHERE Email IS NULL;", cancellationToken);
         await ExecuteSqlAsync("UPDATE Users SET PhoneNumber = '' WHERE PhoneNumber IS NULL;", cancellationToken);
+        await ExecuteSqlAsync("UPDATE Users SET QrCodeValue = 'LIBMEM-' || lower(hex(randomblob(16))) WHERE QrCodeValue IS NULL OR TRIM(QrCodeValue) = '';", cancellationToken);
         await ExecuteSqlAsync("UPDATE Users SET IsActive = 1 WHERE IsActive IS NULL;", cancellationToken);
         await ExecuteSqlAsync("UPDATE Users SET CreatedAt = CURRENT_TIMESTAMP WHERE CreatedAt IS NULL OR TRIM(CreatedAt) = '';", cancellationToken);
 
@@ -209,6 +216,7 @@ public sealed class LibraryDatabaseInitializer
                 FullName = string.IsNullOrWhiteSpace(_defaultAdminOptions.FullName) ? username : _defaultAdminOptions.FullName.Trim(),
                 Email = _defaultAdminOptions.Email?.Trim() ?? string.Empty,
                 PhoneNumber = _defaultAdminOptions.PhoneNumber?.Trim() ?? string.Empty,
+                QrCodeValue = $"LIBMEM-{Guid.NewGuid():N}",
                 Role = UserRole.Admin,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow

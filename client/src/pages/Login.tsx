@@ -1,6 +1,7 @@
 import { useState } from "react";
-import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
+import api from "../services/axiosConfig";
+import type { AuthResponse } from "../types/library";
 
 // The Login component accepts a function (onLogin) to update app state when user logs in
 function Login({ onLogin }: { onLogin: (user: string, role: string, fullName: string) => void }) {
@@ -18,8 +19,8 @@ function Login({ onLogin }: { onLogin: (user: string, role: string, fullName: st
     e.preventDefault();
     setIsLoading(true);
 
-    axios
-      .post("http://localhost:5156/api/Auth/login", { username, password })
+    api
+      .post<AuthResponse>("/Auth/login", { username, password })
       .then((res) => {
         // Store token, identity, and role locally for protected routes
         localStorage.setItem("token", res.data.token);
@@ -27,6 +28,7 @@ function Login({ onLogin }: { onLogin: (user: string, role: string, fullName: st
         localStorage.setItem("role", res.data.role);
         localStorage.setItem("userId", String(res.data.userId ?? ""));
         localStorage.setItem("fullName", res.data.fullName ?? res.data.username);
+        localStorage.setItem("qrCodeValue", res.data.qrCodeValue ?? "");
 
         onLogin(res.data.username, res.data.role, res.data.fullName ?? res.data.username);
 

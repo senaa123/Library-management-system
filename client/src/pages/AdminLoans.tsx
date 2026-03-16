@@ -9,8 +9,11 @@ function AdminLoans() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadLoans = () => {
-    setIsLoading(true);
+  const loadLoans = (showLoader = true) => {
+    if (showLoader) {
+      setIsLoading(true);
+    }
+
     // Staff always see the live list of books that are still out with members.
     api.get("/Loans", { params: { activeOnly: true } })
       .then((response) => setLoans(response.data))
@@ -31,7 +34,21 @@ function AdminLoans() {
       return;
     }
 
-    loadLoans();
+    const fetchInitialLoans = async () => {
+      try {
+        const response = await api.get<Loan[]>("/Loans", { params: { activeOnly: true } });
+        setLoans(response.data);
+      } catch (error: unknown) {
+        const message = typeof error === "object" && error && "response" in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+        alert(message ?? "Failed to load issued books.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void fetchInitialLoans();
   }, [navigate]);
 
   const handleReceived = (loanId: number) => {
