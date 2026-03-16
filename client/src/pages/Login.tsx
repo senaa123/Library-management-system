@@ -3,7 +3,7 @@ import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 
 // The Login component accepts a function (onLogin) to update app state when user logs in
-function Login({ onLogin }: { onLogin: (user: string) => void }) {
+function Login({ onLogin }: { onLogin: (user: string, role: string, fullName: string) => void }) {
   // Form state management
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -21,11 +21,14 @@ function Login({ onLogin }: { onLogin: (user: string) => void }) {
     axios
       .post("http://localhost:5156/api/Auth/login", { username, password })
       .then((res) => {
-        // Store token and username locally for protected routes
+        // Store token, identity, and role locally for protected routes
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("username", res.data.username);
+        localStorage.setItem("role", res.data.role);
+        localStorage.setItem("userId", String(res.data.userId ?? ""));
+        localStorage.setItem("fullName", res.data.fullName ?? res.data.username);
 
-        onLogin(res.data.username);
+        onLogin(res.data.username, res.data.role, res.data.fullName ?? res.data.username);
 
         // Small delay for UI effect, then redirect to home
         setTimeout(() => {

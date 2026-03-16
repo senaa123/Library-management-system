@@ -4,6 +4,7 @@ public enum FailureType
 {
     Validation,
     Unauthorized,
+    Forbidden,
     NotFound,
     Conflict
 }

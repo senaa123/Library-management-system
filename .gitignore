@@ -19,3 +19,9 @@ Thumbs.db
 *.db-shm
 *.db-wal
 *.db-journal
+
+# Local runtime and tooling folders
+.dotnet-cli/
+API/.dotnet-cli/
+API/.keys/
+API/.runlogs/

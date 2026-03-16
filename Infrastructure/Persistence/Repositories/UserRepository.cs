@@ -1,5 +1,6 @@
 using LibraryM.Application.Abstractions.Persistence;
 using LibraryM.Domain.Entities;
+using LibraryM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryM.Infrastructure.Persistence.Repositories;
@@ -25,12 +26,28 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.FirstOrDefaultAsync(user => user.Username.ToLower() == normalizedUsername, cancellationToken);
     }
 
-    public async Task<User> AddAsync(User user, CancellationToken cancellationToken = default)
+    public Task<User?> GetByIdAsync(int userId, CancellationToken cancellationToken = default) =>
+        _dbContext.Users.FirstOrDefaultAsync(user => user.Id == userId, cancellationToken);
+
+    public async Task<IReadOnlyList<User>> GetAllAsync(UserRole? role, bool? isActive, CancellationToken cancellationToken = default)
     {
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return user;
+        var query = _dbContext.Users.AsNoTracking().AsQueryable();
+
+        if (role.HasValue)
+        {
+            query = query.Where(user => user.Role == role.Value);
+        }
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(user => user.IsActive == isActive.Value);
+        }
+
+        return await query.OrderBy(user => user.FullName).ThenBy(user => user.Username).ToListAsync(cancellationToken);
     }
+
+    public async Task AddAsync(User user, CancellationToken cancellationToken = default) =>
+        await _dbContext.Users.AddAsync(user, cancellationToken);
 
     private static string Normalize(string username) => username.Trim().ToLower();
 }

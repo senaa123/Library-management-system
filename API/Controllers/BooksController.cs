@@ -1,6 +1,5 @@
 using LibraryM.Application.Books;
 using LibraryM.Application.Books.Models;
-using LibraryM.Application.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,7 +7,7 @@ namespace LibraryM.WebApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class BooksController : ControllerBase
+public class BooksController : ApiControllerBase
 {
     private readonly IBookService _bookService;
 
@@ -18,9 +17,9 @@ public class BooksController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BookDto>>> GetBooks([FromQuery] string? category, CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<BookDto>>> GetBooks([FromQuery] BookSearchRequest request, CancellationToken cancellationToken)
     {
-        var books = await _bookService.GetBooksAsync(category, cancellationToken);
+        var books = await _bookService.SearchAsync(request, cancellationToken);
         return Ok(books);
     }
 
@@ -31,20 +30,20 @@ public class BooksController : ControllerBase
         return result.IsSuccess && result.Value is not null ? Ok(result.Value) : NotFound();
     }
 
-    [Authorize]
+    [Authorize(Policy = "StaffOnly")]
     [HttpPost]
-    public async Task<ActionResult<BookDto>> PostBook([FromBody] CreateBookRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> PostBook([FromBody] CreateBookRequest request, CancellationToken cancellationToken)
     {
         var result = await _bookService.CreateAsync(request, cancellationToken);
         if (!result.IsSuccess || result.Value is null)
         {
-            return BadRequest(new { message = result.Message });
+            return ToFailureResult(result);
         }
 
         return CreatedAtAction(nameof(GetBook), new { id = result.Value.Id }, result.Value);
     }
 
-    [Authorize]
+    [Authorize(Policy = "StaffOnly")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> PutBook(int id, [FromBody] UpdateBookRequest request, CancellationToken cancellationToken)
     {
@@ -54,16 +53,14 @@ public class BooksController : ControllerBase
             return NoContent();
         }
 
-        return result.FailureType == FailureType.NotFound
-            ? NotFound()
-            : BadRequest(new { message = result.Message });
+        return ToFailureResult(result);
     }
 
-    [Authorize]
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> DeleteBook(int id, CancellationToken cancellationToken)
+    [Authorize(Policy = "StaffOnly")]
+    [HttpPost("{id:int}/remove")]
+    public async Task<IActionResult> RemoveBook(int id, [FromBody] RemoveBookRequest request, CancellationToken cancellationToken)
     {
-        var result = await _bookService.DeleteAsync(id, cancellationToken);
-        return result.IsSuccess ? NoContent() : NotFound();
+        var result = await _bookService.RemoveAsync(id, request, cancellationToken);
+        return result.IsSuccess ? NoContent() : ToFailureResult(result);
     }
 }

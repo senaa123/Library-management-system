@@ -1,13 +1,13 @@
 using LibraryM.Application.Auth;
 using LibraryM.Application.Auth.Models;
-using LibraryM.Application.Common;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LibraryM.WebApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthController : ControllerBase
+public class AuthController : ApiControllerBase
 {
     private readonly IAuthService _authService;
 
@@ -25,7 +25,7 @@ public class AuthController : ControllerBase
             return Ok(new { message = result.Message });
         }
 
-        return BadRequest(new { message = result.Message });
+        return ToFailureResult(result);
     }
 
     [HttpPost("login")]
@@ -34,16 +34,13 @@ public class AuthController : ControllerBase
         var result = await _authService.LoginAsync(request, cancellationToken);
         if (result.IsSuccess && result.Value is not null)
         {
-            return Ok(new
-            {
-                token = result.Value.Token,
-                username = result.Value.Username,
-                role = result.Value.Role
-            });
+            return Ok(result.Value);
         }
 
-        return result.FailureType == FailureType.Validation
-            ? BadRequest(new { message = result.Message })
-            : Unauthorized(new { message = result.Message });
+        return ToFailureResult(result);
     }
+
+    [Authorize]
+    [HttpPost("logout")]
+    public IActionResult Logout() => Ok(new { message = "Logout is handled client-side for JWT authentication." });
 }

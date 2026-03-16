@@ -1,71 +1,79 @@
 import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import api from "../services/axiosConfig";
-import { useParams, useNavigate } from "react-router-dom";
+import { getStoredRole, isLoggedIn, isStaffRole } from "../lib/session";
 
 function EditBook() {
   const { id } = useParams();
   const navigate = useNavigate();
-
-  // Redirect unauthenticated users to login page
-  useEffect(() => {
-    if (!localStorage.getItem("token")) {
-      alert("Please login to edit books!");
-      navigate("/login");
-    }
-  }, [navigate]);
-
-  // Form state for book details
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
+  const [quantity, setQuantity] = useState(1);
 
-  // Load existing book details when page opens
   useEffect(() => {
-    api.get(`/Books/${id}`).then((response) => {
-      setTitle(response.data.title);
-      setAuthor(response.data.author);
-      setDescription(response.data.description);
-      setCategory(response.data.category);
-    });
-  }, [id]);
+    if (!isLoggedIn()) {
+      navigate("/login");
+      return;
+    }
 
-  // Submit edited book data
-  const handleUpdate = (e: React.FormEvent) => {
-    e.preventDefault();
+    if (!isStaffRole(getStoredRole())) {
+      navigate("/");
+      return;
+    }
 
-    const updatedBook = { id, title, author, description, category };
+    api.get(`/Books/${id}`)
+      .then((response) => {
+        setTitle(response.data.title);
+        setAuthor(response.data.author);
+        setDescription(response.data.description);
+        setCategory(response.data.category);
+        setQuantity(response.data.totalCopies);
+      })
+      .catch((error) => {
+        alert(error.response?.data?.message ?? "Failed to load book details.");
+        navigate("/");
+      });
+  }, [id, navigate]);
 
-    api
-      .put(`/Books/${id}`, updatedBook)
+  const handleUpdate = (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const updatedBook = {
+      id,
+      title,
+      author,
+      description,
+      category,
+      totalCopies: quantity,
+    };
+
+    api.put(`/Books/${id}`, updatedBook)
       .then(() => {
         alert("Book updated successfully!");
         navigate("/");
       })
-      .catch(() => alert("Failed to update book!"));
+      .catch((error) => alert(error.response?.data?.message ?? "Failed to update book!"));
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
-      {/* Container Card */}
-      <div className="backdrop-blur-xl bg-white/80 border border-white/50 shadow-2xl rounded-3xl overflow-hidden w-full max-w-lg">
-        
-        {/* Header */}
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-white/50 bg-white/85 shadow-2xl backdrop-blur-xl">
         <div className="bg-gradient-to-r from-slate-900 to-indigo-900 p-6">
-          <h2 className="text-2xl font-bold text-white tracking-wide">Edit Book</h2>
+          <p className="text-sm uppercase tracking-[0.3em] text-blue-200">Admin Section</p>
+          <h2 className="mt-2 text-3xl font-bold text-white">Edit Book</h2>
         </div>
 
-        {/* Form */}
         <div className="p-8">
           <form onSubmit={handleUpdate} className="space-y-5">
-            
             <input
               type="text"
               placeholder="Book Title"
               required
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-white/90 border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
+              onChange={(event) => setTitle(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
 
             <input
@@ -73,23 +81,23 @@ function EditBook() {
               placeholder="Author"
               required
               value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              className="w-full px-4 py-3 bg-white/90 border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
+              onChange={(event) => setAuthor(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
 
             <textarea
               placeholder="Description"
               required
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-4 py-3 bg-white/90 border border-slate-200 rounded-xl shadow-sm h-32 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
+              onChange={(event) => setDescription(event.target.value)}
+              className="h-32 w-full rounded-2xl border border-slate-200 px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
 
             <select
               required
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-3 bg-white/90 border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700"
+              onChange={(event) => setCategory(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">Select Category</option>
               <option value="Fiction">Fiction</option>
@@ -100,15 +108,27 @@ function EditBook() {
               <option value="Other">Other</option>
             </select>
 
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Quantity (total copies for this title)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={quantity}
+                onChange={(event) => setQuantity(Number(event.target.value))}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+              className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 font-semibold text-white shadow-lg transition hover:shadow-xl"
             >
               Update Book
             </button>
           </form>
         </div>
-
       </div>
     </div>
   );
