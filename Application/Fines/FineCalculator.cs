@@ -1,30 +1,34 @@
+using LibraryM.Application.Configuration;
 using LibraryM.Domain.Entities;
 
 namespace LibraryM.Application.Fines;
 
 public static class FineCalculator
 {
-    public static decimal CalculateAccruedFine(Loan loan, decimal finePerDay, DateTime asOfUtc)
+    public static decimal CalculateAccruedFine(Loan loan, LibrarySettings settings, DateTime asOfUtc)
     {
-        if (finePerDay <= 0m)
+        var endDate = (loan.ReturnedAt ?? asOfUtc).Date;
+        var overdueDays = (endDate - loan.DueDate.Date).Days;
+
+        if (overdueDays <= 0)
         {
             return 0m;
         }
 
-        var endDate = (loan.ReturnedAt ?? asOfUtc).Date;
-        var overdueDays = (endDate - loan.DueDate.Date).Days;
+        var firstTierDays = Math.Min(overdueDays, settings.FineEscalationAfterDays);
+        var escalatedDays = Math.Max(0, overdueDays - settings.FineEscalationAfterDays);
+        var accrued = (firstTierDays * settings.BaseFinePerDay) + (escalatedDays * settings.EscalatedFinePerDay);
 
-        return overdueDays > 0 ? overdueDays * finePerDay : 0m;
+        return Math.Round(accrued, 2, MidpointRounding.AwayFromZero);
     }
 
     public static decimal CalculateOutstanding(
         Loan loan,
-        IEnumerable<FinePayment>? payments,
-        decimal finePerDay,
+        decimal appliedPayments,
+        LibrarySettings settings,
         DateTime asOfUtc)
     {
-        var accruedFine = CalculateAccruedFine(loan, finePerDay, asOfUtc);
-        var paidAmount = payments?.Sum(payment => payment.Amount) ?? 0m;
-        return Math.Max(0m, accruedFine - paidAmount);
+        var accruedFine = CalculateAccruedFine(loan, settings, asOfUtc);
+        return Math.Max(0m, accruedFine - appliedPayments);
     }
 }

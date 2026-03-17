@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { extractApiMessage, notifyError, notifySuccess } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import { getStoredRole, isLoggedIn, isStaffRole } from "../lib/session";
 
@@ -37,10 +38,10 @@ function AddBook() {
 
     api.post("/Books", newBook)
       .then(() => {
-        alert("Book added successfully!");
+        notifySuccess("Book added successfully.");
         navigate("/");
       })
-      .catch((error) => alert(error.response?.data?.message ?? "Failed to add book."));
+      .catch((error) => notifyError(extractApiMessage(error, "Failed to add book.")));
   };
 
   return (

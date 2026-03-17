@@ -1,6 +1,7 @@
 using LibraryM.Application.Abstractions.Authentication;
 using LibraryM.Application.Abstractions.Persistence;
 using LibraryM.Application.Common;
+using LibraryM.Application.Fines;
 using LibraryM.Application.Users.Models;
 using LibraryM.Domain.Entities;
 using LibraryM.Domain.Enums;
@@ -12,32 +13,45 @@ public sealed class UserService : IUserService
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITransactionRepository _transactionRepository;
+    private readonly IFineService _fineService;
     private readonly ILibraryUnitOfWork _unitOfWork;
 
     public UserService(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         ITransactionRepository transactionRepository,
+        IFineService fineService,
         ILibraryUnitOfWork unitOfWork)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _transactionRepository = transactionRepository;
+        _fineService = fineService;
         _unitOfWork = unitOfWork;
     }
 
     public async Task<OperationResult<UserDto>> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByIdAsync(id, cancellationToken);
-        return user is null
-            ? OperationResult<UserDto>.Failure("User not found", FailureType.NotFound)
-            : OperationResult<UserDto>.Success(Map(user));
+        if (user is null)
+        {
+            return OperationResult<UserDto>.Failure("User not found", FailureType.NotFound);
+        }
+
+        return OperationResult<UserDto>.Success(await MapAsync(user, cancellationToken));
     }
 
     public async Task<IReadOnlyList<UserDto>> GetUsersAsync(UserRole? role, bool? isActive, CancellationToken cancellationToken = default)
     {
         var users = await _userRepository.GetAllAsync(role, isActive, cancellationToken);
-        return users.Select(Map).ToList();
+        var userDtos = new List<UserDto>(users.Count);
+
+        foreach (var user in users)
+        {
+            userDtos.Add(await MapAsync(user, cancellationToken));
+        }
+
+        return userDtos;
     }
 
     public async Task<OperationResult<UserDto>> CreateStaffAsync(CreateStaffRequest request, int createdByUserId, CancellationToken cancellationToken = default)
@@ -75,6 +89,7 @@ public sealed class UserService : IUserService
             FullName = CleanOptional(request.FullName, username),
             Email = CleanOptional(request.Email),
             PhoneNumber = CleanOptional(request.PhoneNumber),
+            NicNumber = string.Empty,
             Role = role,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
@@ -92,7 +107,7 @@ public sealed class UserService : IUserService
             cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return OperationResult<UserDto>.Success(Map(user));
+        return OperationResult<UserDto>.Success(await MapAsync(user, cancellationToken));
     }
 
     public Task<OperationResult<UserDto>> UpdateProfileAsync(int userId, UpdateUserRequest request, CancellationToken cancellationToken = default) =>
@@ -100,6 +115,41 @@ public sealed class UserService : IUserService
 
     public Task<OperationResult<UserDto>> UpdateUserAsync(int userId, UpdateUserRequest request, int updatedByUserId, CancellationToken cancellationToken = default) =>
         UpdateInternalAsync(userId, request, updatedByUserId, allowAdministrativeChanges: true, cancellationToken);
+
+    public async Task<OperationResult<UserDto>> SetRestrictionAsync(
+        int userId,
+        UpdateMemberRestrictionRequest request,
+        int updatedByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null || user.Role != UserRole.Member)
+        {
+            return OperationResult<UserDto>.Failure("Member account not found", FailureType.NotFound);
+        }
+
+        if (request.Days < 1 || string.IsNullOrWhiteSpace(request.Reason))
+        {
+            return OperationResult<UserDto>.Failure("Reason and restriction days are required", FailureType.Validation);
+        }
+
+        user.RestrictedUntilUtc = DateTime.UtcNow.AddDays(request.Days);
+        user.RestrictionReason = request.Reason.Trim();
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _transactionRepository.AddAsync(
+            new TransactionRecord
+            {
+                Type = TransactionType.MemberRestrictionUpdated,
+                UserId = user.Id,
+                PerformedById = updatedByUserId,
+                Details = $"Member '{user.Username}' was restricted until {user.RestrictedUntilUtc:yyyy-MM-dd}. Reason: {user.RestrictionReason}"
+            },
+            cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return OperationResult<UserDto>.Success(await MapAsync(user, cancellationToken));
+    }
 
     private async Task<OperationResult<UserDto>> UpdateInternalAsync(
         int userId,
@@ -119,9 +169,16 @@ public sealed class UserService : IUserService
             return OperationResult<UserDto>.Failure("Password must be at least 6 characters long", FailureType.Validation);
         }
 
+        var nicNumber = CleanOptional(request.NicNumber, user.NicNumber);
+        if (!string.IsNullOrWhiteSpace(nicNumber) && await _userRepository.ExistsByNicAsync(nicNumber, user.Id, cancellationToken))
+        {
+            return OperationResult<UserDto>.Failure("Another account already uses this NIC number", FailureType.Conflict);
+        }
+
         user.FullName = CleanOptional(request.FullName, user.FullName);
         user.Email = CleanOptional(request.Email, user.Email);
         user.PhoneNumber = CleanOptional(request.PhoneNumber, user.PhoneNumber);
+        user.NicNumber = nicNumber;
 
         if (!string.IsNullOrWhiteSpace(request.Password))
         {
@@ -159,21 +216,35 @@ public sealed class UserService : IUserService
             cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return OperationResult<UserDto>.Success(Map(user));
+        return OperationResult<UserDto>.Success(await MapAsync(user, cancellationToken));
     }
 
-    private static UserDto Map(User user) =>
-        new(
+    private async Task<UserDto> MapAsync(User user, CancellationToken cancellationToken)
+    {
+        var fineStatus = user.Role == UserRole.Member
+            ? await _fineService.GetMemberStatusAsync(user.Id, cancellationToken)
+            : new Application.Fines.Models.MemberFineStatusDto(0m, 0, false, false, false, null, string.Empty, string.Empty);
+
+        return new UserDto(
             user.Id,
             user.Username,
             user.FullName,
             user.Email,
             user.PhoneNumber,
+            user.NicNumber,
             user.QrCodeValue,
             user.Role.ToString(),
             user.IsActive,
+            fineStatus.TotalOutstandingFine,
+            fineStatus.MaxCirculationItems,
+            fineStatus.IsCirculationBlocked,
+            fineStatus.HasTemporaryRestriction,
+            fineStatus.RestrictedUntilUtc,
+            fineStatus.RestrictionReason,
+            fineStatus.WarningMessage,
             user.CreatedAt,
             user.UpdatedAt);
+    }
 
     private static string CleanOptional(string? value, string fallback = "")
     {

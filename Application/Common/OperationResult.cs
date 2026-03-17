@@ -2,6 +2,7 @@ namespace LibraryM.Application.Common;
 
 public enum FailureType
 {
+    None,
     Validation,
     Unauthorized,
     Forbidden,

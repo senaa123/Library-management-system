@@ -47,6 +47,17 @@ public sealed class AuthService : IAuthService
             return OperationResult<RegisterResponse>.Failure("User already exists", FailureType.Conflict);
         }
 
+        if (string.IsNullOrWhiteSpace(request.NicNumber))
+        {
+            return OperationResult<RegisterResponse>.Failure("NIC number is required", FailureType.Validation);
+        }
+
+        var nicNumber = request.NicNumber.Trim();
+        if (await _userRepository.ExistsByNicAsync(nicNumber, cancellationToken: cancellationToken))
+        {
+            return OperationResult<RegisterResponse>.Failure("An account already exists for this NIC number", FailureType.Conflict);
+        }
+
         var qrCodeValue = await GenerateQrCodeValueAsync(cancellationToken);
         var user = new User
         {
@@ -55,6 +66,7 @@ public sealed class AuthService : IAuthService
             FullName = CleanOptional(request.FullName, username),
             Email = CleanOptional(request.Email),
             PhoneNumber = CleanOptional(request.PhoneNumber),
+            NicNumber = nicNumber,
             QrCodeValue = qrCodeValue,
             Role = UserRole.Member,
             IsActive = true,

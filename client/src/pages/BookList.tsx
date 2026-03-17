@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getStoredRole, isLoggedIn, isMemberRole, isStaffRole } from "../lib/session";
+import { extractApiMessage, notifyError, notifySuccess } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import type { Book, Reservation } from "../types/library";
 
@@ -23,7 +24,7 @@ function BookList() {
   const loadBooks = () => {
     api.get<Book[]>("/Books")
       .then((response) => setBooks(response.data))
-      .catch((error) => alert(error.response?.data?.message ?? "Error fetching books."));
+      .catch((error) => notifyError(extractApiMessage(error, "Error fetching books.")));
   };
 
   useEffect(() => {
@@ -48,14 +49,14 @@ function BookList() {
 
     api.post(`/Books/${bookToRemove.id}/remove`, payload)
       .then(() => {
-        alert("Book stock updated successfully.");
+        notifySuccess("Book stock updated successfully.");
         setBookToRemove(null);
         setRemoveMode("copies");
         setRemoveQuantity(1);
         loadBooks();
       })
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to remove book copies.");
+        notifyError(extractApiMessage(error, "Failed to remove book copies."));
       });
   };
 
@@ -70,12 +71,12 @@ function BookList() {
           ? "Reservation placed. A copy is now held for pickup for 5 days."
           : "Reservation placed. You have been added to the waiting queue.";
 
-        alert(message);
+        notifySuccess(message);
         setBookToReserve(null);
         loadBooks();
       })
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to reserve this book.");
+        notifyError(extractApiMessage(error, "Failed to reserve this book."));
       });
   };
 
@@ -292,7 +293,7 @@ function BookList() {
             </p>
 
             <div className="mt-6 rounded-2xl bg-indigo-50 p-4 text-sm text-indigo-900 ring-1 ring-indigo-100">
-              The due timer does not start until a librarian issues the book to you in person.
+              The due timer does not start until a librarian issues the book to you in person. If the pickup window expires without collection, the reservation is cancelled and a $0.25 no-show fine is added.
             </div>
 
             <div className="mt-8 flex justify-end gap-3">

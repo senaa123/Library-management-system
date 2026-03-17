@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getStoredRole, isLoggedIn, isMemberRole } from "../lib/session";
+import { extractApiMessage, notifyError } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import type { Loan } from "../types/library";
 
@@ -24,7 +25,7 @@ function MyBorrowedBooks() {
     api.get<Loan[]>("/Loans", { params: { activeOnly: true } })
       .then((response) => setLoans(response.data))
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to load borrowed books.");
+        notifyError(extractApiMessage(error, "Failed to load borrowed books."));
       })
       .finally(() => setIsLoading(false));
   }, [navigate]);
@@ -54,12 +55,20 @@ function MyBorrowedBooks() {
           <div className="py-10 text-center">
             <p className="text-lg font-semibold text-slate-700">No borrowed books right now.</p>
             <p className="mt-2 text-slate-500">Reserve a title online first, then collect it at the library desk for issuance.</p>
-            <Link
-              to="/reservations"
-              className="mt-6 inline-flex rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-lg transition hover:bg-indigo-700"
-            >
-              View my reservations
-            </Link>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Link
+                to="/reservations"
+                className="inline-flex rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-lg transition hover:bg-indigo-700"
+              >
+                View my reservations
+              </Link>
+              <Link
+                to="/fines"
+                className="inline-flex rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                View my fines
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">

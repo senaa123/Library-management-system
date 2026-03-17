@@ -68,4 +68,12 @@ public class UsersController : ApiControllerBase
         var result = await _userService.UpdateUserAsync(id, request, GetCurrentUserId(), cancellationToken);
         return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
     }
+
+    [Authorize(Policy = "StaffOnly")]
+    [HttpPut("{id:int}/restriction")]
+    public async Task<IActionResult> SetRestriction(int id, [FromBody] UpdateMemberRestrictionRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _userService.SetRestrictionAsync(id, request, GetCurrentUserId(), cancellationToken);
+        return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
+    }
 }

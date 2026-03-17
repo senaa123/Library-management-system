@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import MemberQrCard from "../components/MemberQrCard";
+import { extractApiMessage, notifyError } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import type { RegisterResponse } from "../types/library";
 
@@ -8,15 +9,16 @@ function Register() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [nicNumber, setNicNumber] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ password?: string; phoneNumber?: string }>({});
+  const [errors, setErrors] = useState<{ password?: string; phoneNumber?: string; nicNumber?: string }>({});
   const [registeredMember, setRegisteredMember] = useState<RegisterResponse | null>(null);
 
   const validateForm = () => {
-    const nextErrors: { password?: string; phoneNumber?: string } = {};
+    const nextErrors: { password?: string; phoneNumber?: string; nicNumber?: string } = {};
 
     if (password.length < 6) {
       nextErrors.password = "Password must be at least 6 characters";
@@ -28,6 +30,10 @@ function Register() {
 
     if (phoneNumber.trim().length < 7) {
       nextErrors.phoneNumber = "Phone number should be at least 7 characters";
+    }
+
+    if (nicNumber.trim().length < 5) {
+      nextErrors.nicNumber = "NIC number is required";
     }
 
     setErrors(nextErrors);
@@ -47,6 +53,7 @@ function Register() {
       fullName,
       email,
       phoneNumber,
+      nicNumber,
       username,
       password,
     })
@@ -55,11 +62,7 @@ function Register() {
         setRegisteredMember(response.data);
       })
       .catch((error) => {
-        alert(
-          error.response?.data?.message ??
-          error.response?.data ??
-          "Registration failed. Try again.",
-        );
+        notifyError(extractApiMessage(error, "Registration failed. Try again."));
       })
       .finally(() => setIsLoading(false));
   };
@@ -209,6 +212,24 @@ function Register() {
                   />
                   {errors.phoneNumber && (
                     <p className="mt-2 text-sm text-red-600">{errors.phoneNumber}</p>
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">NIC Number</label>
+                  <input
+                    type="text"
+                    placeholder="Enter your NIC number"
+                    required
+                    value={nicNumber}
+                    onChange={(event) => setNicNumber(event.target.value)}
+                    disabled={isLoading}
+                    className={`w-full rounded-xl border ${
+                      errors.nicNumber ? "border-red-300" : "border-slate-200"
+                    } bg-slate-50 px-4 py-3.5 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                  {errors.nicNumber && (
+                    <p className="mt-2 text-sm text-red-600">{errors.nicNumber}</p>
                   )}
                 </div>
               </div>

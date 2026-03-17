@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import QrCameraScanner from "../components/QrCameraScanner";
 import { getStoredRole, isLoggedIn, isStaffRole } from "../lib/session";
+import { extractApiMessage, notifyError, notifySuccess } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import type { Book } from "../types/library";
 
@@ -27,7 +28,7 @@ function StaffBookSection() {
     api.get<Book[]>("/Books", { params: { availableOnly: true } })
       .then((response) => setBooks(response.data))
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to load available books.");
+        notifyError(extractApiMessage(error, "Failed to load available books."));
       })
       .finally(() => setIsLoading(false));
   };
@@ -48,10 +49,7 @@ function StaffBookSection() {
         const response = await api.get<Book[]>("/Books", { params: { availableOnly: true } });
         setBooks(response.data);
       } catch (error: unknown) {
-        const message = typeof error === "object" && error && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
-          : undefined;
-        alert(message ?? "Failed to load available books.");
+        notifyError(extractApiMessage(error, "Failed to load available books."));
       } finally {
         setIsLoading(false);
       }
@@ -97,12 +95,12 @@ function StaffBookSection() {
       borrowDays,
     })
       .then(() => {
-        alert("Book issued successfully.");
+        notifySuccess("Book issued successfully.");
         resetIssueDialog();
         loadBooks();
       })
       .catch((error) => {
-        setScanError(error.response?.data?.message ?? "Failed to issue this book.");
+        setScanError(extractApiMessage(error, "Failed to issue this book."));
         setIsIssuing(false);
         setScannerSession((current) => current + 1);
       });

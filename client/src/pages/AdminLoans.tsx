@@ -2,12 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/axiosConfig";
 import { getStoredRole, isLoggedIn, isStaffRole } from "../lib/session";
+import { extractApiMessage, notifyError, notifySuccess } from "../lib/notifications";
 import type { Loan } from "../types/library";
+
+type ReturnFineType = "DamagedBook" | "LostBook" | "MissingPages";
 
 function AdminLoans() {
   const navigate = useNavigate();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loanToReceive, setLoanToReceive] = useState<Loan | null>(null);
+  const [addFine, setAddFine] = useState(false);
+  const [fineType, setFineType] = useState<ReturnFineType>("DamagedBook");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadLoans = (showLoader = true) => {
     if (showLoader) {
@@ -18,7 +25,7 @@ function AdminLoans() {
     api.get("/Loans", { params: { activeOnly: true } })
       .then((response) => setLoans(response.data))
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to load issued books.");
+        notifyError(extractApiMessage(error, "Failed to load issued books."));
       })
       .finally(() => setIsLoading(false));
   };
@@ -39,10 +46,7 @@ function AdminLoans() {
         const response = await api.get<Loan[]>("/Loans", { params: { activeOnly: true } });
         setLoans(response.data);
       } catch (error: unknown) {
-        const message = typeof error === "object" && error && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
-          : undefined;
-        alert(message ?? "Failed to load issued books.");
+        notifyError(extractApiMessage(error, "Failed to load issued books."));
       } finally {
         setIsLoading(false);
       }
@@ -51,16 +55,29 @@ function AdminLoans() {
     void fetchInitialLoans();
   }, [navigate]);
 
-  const handleReceived = (loanId: number) => {
-    // Returning through the API updates the loan status and adds the copy back into library stock.
-    api.post(`/Loans/${loanId}/return`)
-      .then(() => {
-        alert("Book marked as received.");
-        loadLoans();
-      })
-      .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to mark this book as received.");
+  const handleReceived = async () => {
+    if (!loanToReceive) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await api.post(`/Loans/${loanToReceive.id}/return`, {
+        addFine,
+        fineType: addFine ? fineType : null,
       });
+
+      notifySuccess("Book marked as received.");
+      setLoanToReceive(null);
+      setAddFine(false);
+      setFineType("DamagedBook");
+      loadLoans();
+    } catch (error) {
+      notifyError(extractApiMessage(error, "Failed to mark this book as received."));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -115,7 +132,11 @@ function AdminLoans() {
                     </td>
                     <td className="px-4 py-4 text-center">
                       <button
-                        onClick={() => handleReceived(loan.id)}
+                        onClick={() => {
+                          setLoanToReceive(loan);
+                          setAddFine(false);
+                          setFineType("DamagedBook");
+                        }}
                         className="rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-700"
                       >
                         Received
@@ -128,6 +149,60 @@ function AdminLoans() {
           </div>
         )}
       </div>
+
+      {loanToReceive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl">
+            <p className="text-sm uppercase tracking-[0.3em] text-emerald-500">Receive Book</p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-900">{loanToReceive.bookTitle}</h2>
+            <p className="mt-2 text-slate-600">
+              Confirm the return, and optionally add a condition fine to the member account.
+            </p>
+
+            <div className="mt-6 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <label className="flex items-center gap-3 text-sm font-semibold text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={addFine}
+                  onChange={(event) => setAddFine(event.target.checked)}
+                />
+                Add a fine
+              </label>
+
+              {addFine && (
+                <div className="mt-4">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Fine type</label>
+                  <select
+                    value={fineType}
+                    onChange={(event) => setFineType(event.target.value as ReturnFineType)}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="DamagedBook">Damaged Book: $0.50</option>
+                    <option value="LostBook">Lost Book: $10.00</option>
+                    <option value="MissingPages">Missing Pages: $1.00</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 flex justify-end gap-3">
+              <button
+                onClick={() => setLoanToReceive(null)}
+                className="rounded-xl border border-slate-300 px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReceived}
+                disabled={isSubmitting}
+                className="rounded-xl bg-emerald-600 px-5 py-2 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Saving..." : "Confirm receive"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

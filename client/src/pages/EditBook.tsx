@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { extractApiMessage, notifyError, notifySuccess } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import { getStoredRole, isLoggedIn, isStaffRole } from "../lib/session";
 
@@ -32,7 +33,7 @@ function EditBook() {
         setQuantity(response.data.totalCopies);
       })
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to load book details.");
+        notifyError(extractApiMessage(error, "Failed to load book details."));
         navigate("/");
       });
   }, [id, navigate]);
@@ -51,10 +52,10 @@ function EditBook() {
 
     api.put(`/Books/${id}`, updatedBook)
       .then(() => {
-        alert("Book updated successfully!");
+        notifySuccess("Book updated successfully.");
         navigate("/");
       })
-      .catch((error) => alert(error.response?.data?.message ?? "Failed to update book!"));
+      .catch((error) => notifyError(extractApiMessage(error, "Failed to update book.")));
   };
 
   return (

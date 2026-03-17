@@ -1,6 +1,8 @@
 using LibraryM.Application.Abstractions.Persistence;
 using LibraryM.Application.Common;
 using LibraryM.Application.Configuration;
+using LibraryM.Application.Fines;
+using LibraryM.Application.Fines.Models;
 using LibraryM.Application.Reservations.Models;
 using LibraryM.Domain.Entities;
 using LibraryM.Domain.Enums;
@@ -14,6 +16,7 @@ public sealed class ReservationService : IReservationService
     private readonly ILoanRepository _loanRepository;
     private readonly IReservationRepository _reservationRepository;
     private readonly ITransactionRepository _transactionRepository;
+    private readonly IFineService _fineService;
     private readonly ILibraryUnitOfWork _unitOfWork;
     private readonly LibrarySettings _librarySettings;
 
@@ -23,6 +26,7 @@ public sealed class ReservationService : IReservationService
         ILoanRepository loanRepository,
         IReservationRepository reservationRepository,
         ITransactionRepository transactionRepository,
+        IFineService fineService,
         ILibraryUnitOfWork unitOfWork,
         LibrarySettings librarySettings)
     {
@@ -31,6 +35,7 @@ public sealed class ReservationService : IReservationService
         _loanRepository = loanRepository;
         _reservationRepository = reservationRepository;
         _transactionRepository = transactionRepository;
+        _fineService = fineService;
         _unitOfWork = unitOfWork;
         _librarySettings = librarySettings;
     }
@@ -85,6 +90,16 @@ public sealed class ReservationService : IReservationService
             return OperationResult<ReservationDto>.Failure("Member account is inactive", FailureType.Conflict);
         }
 
+        var fineStatus = await _fineService.GetMemberStatusAsync(member.Id, cancellationToken);
+        if (fineStatus.IsCirculationBlocked)
+        {
+            return OperationResult<ReservationDto>.Failure(
+                string.IsNullOrWhiteSpace(fineStatus.WarningMessage)
+                    ? "This member is currently restricted from placing reservations."
+                    : fineStatus.WarningMessage,
+                FailureType.Conflict);
+        }
+
         var existingReservation = await _reservationRepository.GetActiveReservationAsync(book.Id, member.Id, cancellationToken);
         if (existingReservation is not null)
         {
@@ -95,6 +110,18 @@ public sealed class ReservationService : IReservationService
         if (activeLoan is not null)
         {
             return OperationResult<ReservationDto>.Failure("The member already has this book on loan", FailureType.Conflict);
+        }
+
+        var activeLoans = await _loanRepository.GetLoansAsync(member.Id, activeOnly: true, cancellationToken);
+        var activeReservations = await _reservationRepository.GetReservationsAsync(member.Id, null, cancellationToken);
+        var currentCirculationCount = activeLoans.Count + activeReservations.Count(currentReservation =>
+            currentReservation.Status is ReservationStatus.Active or ReservationStatus.Available);
+
+        if (currentCirculationCount >= fineStatus.MaxCirculationItems)
+        {
+            return OperationResult<ReservationDto>.Failure(
+                $"This member is limited to {fineStatus.MaxCirculationItems} active reserved/borrowed books right now.",
+                FailureType.Conflict);
         }
 
         var reservedAt = DateTime.UtcNow;
@@ -213,6 +240,18 @@ public sealed class ReservationService : IReservationService
                 reservation.Book.AvailableCopies = Math.Min(reservation.Book.TotalCopies, reservation.Book.AvailableCopies + 1);
                 await PromoteQueuedReservationsAsync(reservation.Book, null, currentTime, cancellationToken);
             }
+
+            await _fineService.AddChargeAsync(
+                new CreateFineChargeRequest(
+                    reservation.MemberId,
+                    FineChargeType.ReservationNoShow,
+                    _librarySettings.ReservationNoShowFine,
+                    $"Pickup window expired for reservation #{reservation.Id}.",
+                    null,
+                    null,
+                    reservation.Id,
+                    $"reservation-expired-{reservation.Id}"),
+                cancellationToken);
 
             await _transactionRepository.AddAsync(
                 new TransactionRecord
