@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { extractApiMessage, notifyError } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import type { AuthResponse } from "../types/library";
 
@@ -38,7 +39,7 @@ function Login({ onLogin }: { onLogin: (user: string, role: string, fullName: st
         }, 500);
       })
       .catch((err) => {
-        alert(err.response?.data?.message || "Invalid Credentials");
+        notifyError(extractApiMessage(err, "Invalid credentials"));
       })
       .finally(() => {
         setIsLoading(false);

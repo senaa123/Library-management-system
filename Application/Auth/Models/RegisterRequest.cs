@@ -16,4 +16,7 @@ public sealed class RegisterRequest
     public string? Email { get; set; }
 
     public string? PhoneNumber { get; set; }
+
+    [Required]
+    public string NicNumber { get; set; } = string.Empty;
 }

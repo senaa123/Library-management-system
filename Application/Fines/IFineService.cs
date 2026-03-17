@@ -11,4 +11,12 @@ public interface IFineService
     Task<OperationResult<IReadOnlyList<FinePaymentRecordDto>>> GetPaymentsAsync(int? memberId, int requesterUserId, UserRole requesterRole, CancellationToken cancellationToken = default);
 
     Task<OperationResult<FinePaymentRecordDto>> RecordPaymentAsync(FinePaymentRequest request, int receivedByUserId, CancellationToken cancellationToken = default);
+
+    Task<MemberFineStatusDto> GetMemberStatusAsync(int memberId, CancellationToken cancellationToken = default);
+
+    Task<OperationResult> AddChargeAsync(CreateFineChargeRequest request, CancellationToken cancellationToken = default);
+
+    Task<OperationResult<CreateFineCheckoutSessionResult>> CreateCheckoutSessionAsync(int memberId, CancellationToken cancellationToken = default);
+
+    Task<OperationResult<FinePaymentRecordDto>> CompleteCheckoutAsync(string sessionId, int memberId, CancellationToken cancellationToken = default);
 }

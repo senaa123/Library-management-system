@@ -36,9 +36,21 @@ public sealed class FinePaymentRepository : IFinePaymentRepository
         }
 
         return await BaseQuery()
-            .Where(payment => loanIdList.Contains(payment.LoanId))
+            .Where(payment => payment.LoanId.HasValue && loanIdList.Contains(payment.LoanId.Value))
             .OrderByDescending(payment => payment.PaidAt)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<bool> ExistsByExternalReferenceAsync(string externalReference, CancellationToken cancellationToken = default)
+    {
+        var normalizedReference = Normalize(externalReference);
+        return _dbContext.FinePayments.AnyAsync(payment => payment.ExternalReference.ToLower() == normalizedReference, cancellationToken);
+    }
+
+    public Task<FinePayment?> GetByExternalReferenceAsync(string externalReference, CancellationToken cancellationToken = default)
+    {
+        var normalizedReference = Normalize(externalReference);
+        return BaseQuery().FirstOrDefaultAsync(payment => payment.ExternalReference.ToLower() == normalizedReference, cancellationToken);
     }
 
     public async Task AddAsync(FinePayment payment, CancellationToken cancellationToken = default) =>
@@ -50,4 +62,6 @@ public sealed class FinePaymentRepository : IFinePaymentRepository
                 .ThenInclude(loan => loan!.Book)
             .Include(payment => payment.Member)
             .Include(payment => payment.ReceivedBy);
+
+    private static string Normalize(string value) => value.Trim().ToLower();
 }

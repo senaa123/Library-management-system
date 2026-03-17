@@ -38,4 +38,20 @@ public class FinesController : ApiControllerBase
         var result = await _fineService.RecordPaymentAsync(request, GetCurrentUserId(), cancellationToken);
         return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
     }
+
+    [Authorize(Roles = "Member")]
+    [HttpPost("checkout/session")]
+    public async Task<IActionResult> CreateCheckoutSession(CancellationToken cancellationToken)
+    {
+        var result = await _fineService.CreateCheckoutSessionAsync(GetCurrentUserId(), cancellationToken);
+        return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
+    }
+
+    [Authorize(Roles = "Member")]
+    [HttpPost("checkout/complete")]
+    public async Task<IActionResult> CompleteCheckout([FromBody] CompleteFineCheckoutRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _fineService.CompleteCheckoutAsync(request.SessionId, GetCurrentUserId(), cancellationToken);
+        return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
+    }
 }

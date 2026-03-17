@@ -55,9 +55,9 @@ public class LoansController : ApiControllerBase
 
     [Authorize(Policy = "StaffOnly")]
     [HttpPost("{id:int}/return")]
-    public async Task<IActionResult> ReturnLoan(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> ReturnLoan(int id, [FromBody] ReturnLoanRequest? request, CancellationToken cancellationToken)
     {
-        var result = await _loanService.ReturnAsync(id, GetCurrentUserId(), cancellationToken);
+        var result = await _loanService.ReturnAsync(id, request ?? new ReturnLoanRequest(), GetCurrentUserId(), cancellationToken);
         return result.IsSuccess && result.Value is not null ? Ok(result.Value) : ToFailureResult(result);
     }
 

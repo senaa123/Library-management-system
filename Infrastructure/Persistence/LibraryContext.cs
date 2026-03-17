@@ -19,6 +19,8 @@ public sealed class LibraryContext : DbContext
 
     public DbSet<Reservation> Reservations => Set<Reservation>();
 
+    public DbSet<FineCharge> FineCharges => Set<FineCharge>();
+
     public DbSet<FinePayment> FinePayments => Set<FinePayment>();
 
     public DbSet<TransactionRecord> TransactionRecords => Set<TransactionRecord>();
@@ -52,9 +54,11 @@ public sealed class LibraryContext : DbContext
             builder.Property(user => user.FullName).IsRequired();
             builder.Property(user => user.Email).HasDefaultValue(string.Empty);
             builder.Property(user => user.PhoneNumber).HasDefaultValue(string.Empty);
+            builder.Property(user => user.NicNumber).HasDefaultValue(string.Empty);
             builder.Property(user => user.QrCodeValue).IsRequired();
             builder.Property(user => user.Role).HasConversion<string>().IsRequired();
             builder.Property(user => user.IsActive).HasDefaultValue(true);
+            builder.Property(user => user.RestrictionReason).HasDefaultValue(string.Empty);
             builder.HasIndex(user => user.Username).IsUnique();
             builder.HasIndex(user => user.QrCodeValue).IsUnique();
             builder.HasIndex(user => user.Role);
@@ -104,14 +108,51 @@ public sealed class LibraryContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<FineCharge>(builder =>
+        {
+            builder.ToTable("FineCharges");
+            builder.HasKey(charge => charge.Id);
+            builder.Property(charge => charge.ChargeType).HasConversion<string>().IsRequired();
+            builder.Property(charge => charge.Amount).HasPrecision(18, 2);
+            builder.Property(charge => charge.Description).HasDefaultValue(string.Empty);
+            builder.Property(charge => charge.ExternalReference).HasDefaultValue(string.Empty);
+            builder.HasIndex(charge => charge.MemberId);
+            builder.HasIndex(charge => charge.LoanId);
+            builder.HasIndex(charge => charge.ReservationId);
+            builder.HasIndex(charge => charge.ExternalReference).IsUnique();
+
+            builder.HasOne(charge => charge.Member)
+                .WithMany(user => user.FineCharges)
+                .HasForeignKey(charge => charge.MemberId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne(charge => charge.Loan)
+                .WithMany()
+                .HasForeignKey(charge => charge.LoanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne(charge => charge.Reservation)
+                .WithMany()
+                .HasForeignKey(charge => charge.ReservationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne(charge => charge.CreatedBy)
+                .WithMany(user => user.CreatedFineCharges)
+                .HasForeignKey(charge => charge.CreatedById)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<FinePayment>(builder =>
         {
             builder.ToTable("FinePayments");
             builder.HasKey(payment => payment.Id);
             builder.Property(payment => payment.Amount).HasPrecision(18, 2);
+            builder.Property(payment => payment.PaymentMethod).HasDefaultValue(string.Empty);
+            builder.Property(payment => payment.ExternalReference).HasDefaultValue(string.Empty);
             builder.Property(payment => payment.Notes).HasDefaultValue(string.Empty);
             builder.HasIndex(payment => payment.LoanId);
             builder.HasIndex(payment => payment.MemberId);
+            builder.HasIndex(payment => payment.ExternalReference).IsUnique();
 
             builder.HasOne(payment => payment.Loan)
                 .WithMany(loan => loan.FinePayments)

@@ -26,6 +26,16 @@ public sealed class UserRepository : IUserRepository
         return _dbContext.Users.AnyAsync(user => user.QrCodeValue.ToLower() == normalizedQrCode, cancellationToken);
     }
 
+    public Task<bool> ExistsByNicAsync(string nicNumber, int? excludedUserId = null, CancellationToken cancellationToken = default)
+    {
+        var normalizedNic = Normalize(nicNumber);
+        return _dbContext.Users.AnyAsync(
+            user =>
+                user.NicNumber.ToLower() == normalizedNic &&
+                (!excludedUserId.HasValue || user.Id != excludedUserId.Value),
+            cancellationToken);
+    }
+
     public Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
     {
         var normalizedUsername = Normalize(username);

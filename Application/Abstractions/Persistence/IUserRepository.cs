@@ -9,6 +9,8 @@ public interface IUserRepository
 
     Task<bool> ExistsByQrCodeAsync(string qrCodeValue, CancellationToken cancellationToken = default);
 
+    Task<bool> ExistsByNicAsync(string nicNumber, int? excludedUserId = null, CancellationToken cancellationToken = default);
+
     Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default);
 
     Task<User?> GetByQrCodeAsync(string qrCodeValue, CancellationToken cancellationToken = default);

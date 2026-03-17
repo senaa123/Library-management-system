@@ -16,11 +16,17 @@ public class User
 
     public string PhoneNumber { get; set; } = string.Empty;
 
+    public string NicNumber { get; set; } = string.Empty;
+
     public string QrCodeValue { get; set; } = string.Empty;
 
     public UserRole Role { get; set; } = UserRole.Member;
 
     public bool IsActive { get; set; } = true;
+
+    public DateTime? RestrictedUntilUtc { get; set; }
+
+    public string RestrictionReason { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -32,7 +38,11 @@ public class User
 
     public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
 
+    public ICollection<FineCharge> FineCharges { get; set; } = new List<FineCharge>();
+
     public ICollection<FinePayment> FinePayments { get; set; } = new List<FinePayment>();
 
     public ICollection<FinePayment> CollectedFinePayments { get; set; } = new List<FinePayment>();
+
+    public ICollection<FineCharge> CreatedFineCharges { get; set; } = new List<FineCharge>();
 }

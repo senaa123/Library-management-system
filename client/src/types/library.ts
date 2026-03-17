@@ -30,6 +30,17 @@ export interface RegisterResponse {
   qrCodeValue: string;
 }
 
+export interface MemberFineStatus {
+  totalOutstandingFine: number;
+  maxCirculationItems: number;
+  isFineLimited: boolean;
+  isCirculationBlocked: boolean;
+  hasTemporaryRestriction: boolean;
+  restrictedUntilUtc?: string | null;
+  restrictionReason: string;
+  warningMessage: string;
+}
+
 export interface Loan {
   id: number;
   bookId: number;
@@ -77,9 +88,60 @@ export interface UserProfile {
   fullName: string;
   email: string;
   phoneNumber: string;
+  nicNumber: string;
   qrCodeValue: string;
   role: string;
   isActive: boolean;
+  totalOutstandingFine: number;
+  maxCirculationItems: number;
+  isCirculationBlocked: boolean;
+  hasTemporaryRestriction: boolean;
+  restrictedUntilUtc?: string | null;
+  restrictionReason: string;
+  restrictionWarning: string;
   createdAt: string;
   updatedAt?: string | null;
+}
+
+export interface FineItem {
+  loanId?: number | null;
+  reservationId?: number | null;
+  bookId?: number | null;
+  bookTitle: string;
+  fineType: string;
+  description: string;
+  assessedAt: string;
+  dueDate: string;
+  returnedAt?: string | null;
+  accruedAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+}
+
+export interface FineSummary {
+  totalAccrued: number;
+  totalPaid: number;
+  totalOutstanding: number;
+  status: MemberFineStatus;
+  items: FineItem[];
+}
+
+export interface FinePaymentRecord {
+  id: number;
+  loanId?: number | null;
+  memberId: number;
+  memberName: string;
+  amount: number;
+  paidAt: string;
+  notes: string;
+  receivedById?: number | null;
+  receivedByName: string;
+  paymentMethod: string;
+  externalReference: string;
+}
+
+export interface FineCheckoutSession {
+  sessionId: string;
+  checkoutUrl: string;
+  amount: number;
 }

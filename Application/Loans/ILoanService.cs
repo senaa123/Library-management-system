@@ -16,7 +16,7 @@ public interface ILoanService
 
     Task<OperationResult<LoanDto>> BorrowAsync(BorrowBookRequest request, int memberUserId, CancellationToken cancellationToken = default);
 
-    Task<OperationResult<LoanDto>> ReturnAsync(int loanId, int returnedByUserId, CancellationToken cancellationToken = default);
+    Task<OperationResult<LoanDto>> ReturnAsync(int loanId, ReturnLoanRequest request, int returnedByUserId, CancellationToken cancellationToken = default);
 
     Task<OperationResult<LoanDto>> RenewAsync(int loanId, int requesterUserId, UserRole requesterRole, CancellationToken cancellationToken = default);
 }

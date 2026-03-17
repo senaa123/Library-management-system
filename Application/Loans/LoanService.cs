@@ -2,6 +2,7 @@ using LibraryM.Application.Abstractions.Persistence;
 using LibraryM.Application.Common;
 using LibraryM.Application.Configuration;
 using LibraryM.Application.Fines;
+using LibraryM.Application.Fines.Models;
 using LibraryM.Application.Loans.Models;
 using LibraryM.Domain.Entities;
 using LibraryM.Domain.Enums;
@@ -15,6 +16,7 @@ public sealed class LoanService : ILoanService
     private readonly ILoanRepository _loanRepository;
     private readonly IReservationRepository _reservationRepository;
     private readonly ITransactionRepository _transactionRepository;
+    private readonly IFineService _fineService;
     private readonly ILibraryUnitOfWork _unitOfWork;
     private readonly LibrarySettings _librarySettings;
 
@@ -24,6 +26,7 @@ public sealed class LoanService : ILoanService
         ILoanRepository loanRepository,
         IReservationRepository reservationRepository,
         ITransactionRepository transactionRepository,
+        IFineService fineService,
         ILibraryUnitOfWork unitOfWork,
         LibrarySettings librarySettings)
     {
@@ -32,6 +35,7 @@ public sealed class LoanService : ILoanService
         _loanRepository = loanRepository;
         _reservationRepository = reservationRepository;
         _transactionRepository = transactionRepository;
+        _fineService = fineService;
         _unitOfWork = unitOfWork;
         _librarySettings = librarySettings;
     }
@@ -165,10 +169,27 @@ public sealed class LoanService : ILoanService
             return OperationResult<LoanDto>.Failure("Member account is inactive", FailureType.Conflict);
         }
 
-        var activeLoans = await _loanRepository.GetLoansAsync(member.Id, activeOnly: true, cancellationToken);
-        if (activeLoans.Count >= _librarySettings.MaxConcurrentLoans)
+        var fineStatus = await _fineService.GetMemberStatusAsync(member.Id, cancellationToken);
+        if (fineStatus.IsCirculationBlocked)
         {
-            return OperationResult<LoanDto>.Failure($"A member can only borrow {_librarySettings.MaxConcurrentLoans} different books at a time", FailureType.Conflict);
+            return OperationResult<LoanDto>.Failure(
+                string.IsNullOrWhiteSpace(fineStatus.WarningMessage)
+                    ? "This member is currently restricted from borrowing books."
+                    : fineStatus.WarningMessage,
+                FailureType.Conflict);
+        }
+
+        var activeLoans = await _loanRepository.GetLoansAsync(member.Id, activeOnly: true, cancellationToken);
+        var activeReservations = await _reservationRepository.GetReservationsAsync(member.Id, null, cancellationToken);
+        var currentCirculationCount = activeLoans.Count + activeReservations.Count(currentReservation =>
+            currentReservation.Status is ReservationStatus.Active or ReservationStatus.Available);
+        var projectedCirculationCount = reservation is null ? currentCirculationCount + 1 : currentCirculationCount;
+
+        if (projectedCirculationCount > fineStatus.MaxCirculationItems)
+        {
+            return OperationResult<LoanDto>.Failure(
+                $"This member is limited to {fineStatus.MaxCirculationItems} active reserved/borrowed books right now.",
+                FailureType.Conflict);
         }
 
         var existingLoan = await _loanRepository.GetActiveLoanAsync(book.Id, member.Id, cancellationToken);
@@ -230,7 +251,11 @@ public sealed class LoanService : ILoanService
         return OperationResult<LoanDto>.Success(Map(loan));
     }
 
-    public async Task<OperationResult<LoanDto>> ReturnAsync(int loanId, int returnedByUserId, CancellationToken cancellationToken = default)
+    public async Task<OperationResult<LoanDto>> ReturnAsync(
+        int loanId,
+        ReturnLoanRequest request,
+        int returnedByUserId,
+        CancellationToken cancellationToken = default)
     {
         var loan = await _loanRepository.GetByIdAsync(loanId, cancellationToken);
         if (loan is null)
@@ -248,13 +273,29 @@ public sealed class LoanService : ILoanService
             return OperationResult<LoanDto>.Failure("Loan book details are unavailable", FailureType.Conflict);
         }
 
+        var fineType = request.AddFine ? ParseFineType(request.FineType) : null;
+        if (request.AddFine && fineType is null)
+        {
+            return OperationResult<LoanDto>.Failure("A valid fine type is required when adding a condition fine.", FailureType.Validation);
+        }
+
         var returnedAt = DateTime.UtcNow;
         loan.Status = LoanStatus.Returned;
         loan.ReturnedAt = returnedAt;
-        loan.Book.AvailableCopies = Math.Min(loan.Book.TotalCopies, loan.Book.AvailableCopies + 1);
 
-        // When a copy comes back, we immediately hold it for the next queued reservation before exposing it as free stock.
-        await PromoteQueuedReservationsAsync(loan.Book, returnedByUserId, returnedAt, cancellationToken);
+        if (fineType == FineChargeType.LostBook)
+        {
+            // Lost copies should not come back into live stock, so we reduce the catalog total instead.
+            loan.Book.TotalCopies = Math.Max(0, loan.Book.TotalCopies - 1);
+            loan.Book.AvailableCopies = Math.Min(loan.Book.AvailableCopies, loan.Book.TotalCopies);
+        }
+        else
+        {
+            loan.Book.AvailableCopies = Math.Min(loan.Book.TotalCopies, loan.Book.AvailableCopies + 1);
+
+            // When a copy comes back, we immediately hold it for the next queued reservation before exposing it as free stock.
+            await PromoteQueuedReservationsAsync(loan.Book, returnedByUserId, returnedAt, cancellationToken);
+        }
 
         await _transactionRepository.AddAsync(
             new TransactionRecord
@@ -268,6 +309,28 @@ public sealed class LoanService : ILoanService
             },
             cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (fineType.HasValue)
+        {
+            var chargeAmount = ResolveFineAmount(fineType.Value);
+            var description = fineType.Value switch
+            {
+                FineChargeType.DamagedBook => $"Condition fine added when '{loan.Book.Title}' was returned damaged.",
+                FineChargeType.LostBook => $"Replacement fine added because '{loan.Book.Title}' was reported lost.",
+                FineChargeType.MissingPages => $"Condition fine added because '{loan.Book.Title}' was returned with missing pages.",
+                _ => string.Empty
+            };
+
+            await _fineService.AddChargeAsync(
+                new CreateFineChargeRequest(
+                    loan.BorrowerId,
+                    fineType.Value,
+                    chargeAmount,
+                    description,
+                    returnedByUserId,
+                    loan.Id),
+                cancellationToken);
+        }
 
         return OperationResult<LoanDto>.Success(Map(loan));
     }
@@ -377,7 +440,7 @@ public sealed class LoanService : ILoanService
             loan.ReturnedAt,
             loan.RenewCount,
             loan.Status.ToString(),
-            FineCalculator.CalculateOutstanding(loan, loan.FinePayments, _librarySettings.FinePerDay, DateTime.UtcNow),
+            FineCalculator.CalculateAccruedFine(loan, _librarySettings, DateTime.UtcNow),
             Math.Max(1, (loan.DueDate.Date - loan.IssuedAt.Date).Days),
             timeMetrics.daysLeft,
             timeMetrics.label);
@@ -413,4 +476,25 @@ public sealed class LoanService : ILoanService
         var overdueDays = Math.Abs(daysLeft);
         return (daysLeft, overdueDays == 1 ? "1 day overdue" : $"{overdueDays} days overdue");
     }
+
+    private FineChargeType? ParseFineType(string? fineType)
+    {
+        if (string.IsNullOrWhiteSpace(fineType))
+        {
+            return null;
+        }
+
+        return Enum.TryParse<FineChargeType>(fineType.Trim(), ignoreCase: true, out var parsedType)
+            ? parsedType
+            : null;
+    }
+
+    private decimal ResolveFineAmount(FineChargeType fineType) =>
+        fineType switch
+        {
+            FineChargeType.DamagedBook => _librarySettings.DamagedBookFine,
+            FineChargeType.LostBook => _librarySettings.LostBookFine,
+            FineChargeType.MissingPages => _librarySettings.MissingPagesFine,
+            _ => 0m
+        };
 }

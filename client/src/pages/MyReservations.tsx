@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MemberQrCard from "../components/MemberQrCard";
 import { getStoredRole, isLoggedIn, isMemberRole } from "../lib/session";
+import { extractApiMessage, notifyError, notifySuccess } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import type { Reservation, UserProfile } from "../types/library";
 
@@ -42,7 +43,7 @@ function MyReservations() {
         setReservations(reservationsResponse.data);
       })
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to load your reservations.");
+        notifyError(extractApiMessage(error, "Failed to load your reservations."));
       })
       .finally(() => setIsLoading(false));
   };
@@ -68,10 +69,7 @@ function MyReservations() {
         setMember(memberResponse.data);
         setReservations(reservationsResponse.data);
       } catch (error: unknown) {
-        const message = typeof error === "object" && error && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
-          : undefined;
-        alert(message ?? "Failed to load your reservations.");
+        notifyError(extractApiMessage(error, "Failed to load your reservations."));
       } finally {
         setIsLoading(false);
       }
@@ -85,11 +83,11 @@ function MyReservations() {
 
     api.post(`/Reservations/${reservationId}/cancel`)
       .then(() => {
-        alert("Reservation cancelled.");
+        notifySuccess("Reservation cancelled.");
         loadData();
       })
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to cancel reservation.");
+        notifyError(extractApiMessage(error, "Failed to cancel reservation."));
       })
       .finally(() => setActiveReservationId(null));
   };
@@ -104,7 +102,7 @@ function MyReservations() {
           <p className="text-sm uppercase tracking-[0.3em] text-indigo-500">Member Section</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-900">My Reservations</h1>
           <p className="mt-3 max-w-2xl text-slate-600">
-            Reserve books online, monitor the 5-day collection window, and cancel reservations you no longer need.
+            Reserve books online, monitor the 5-day collection window, and cancel reservations you no longer need before the system adds a no-show fine.
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">

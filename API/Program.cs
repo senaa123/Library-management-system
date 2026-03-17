@@ -1,5 +1,6 @@
 using System.Text;
 using LibraryM.Application.Abstractions.Authentication;
+using LibraryM.Application.Abstractions.Payments;
 using LibraryM.Application.Abstractions.Persistence;
 using LibraryM.Application.Auth;
 using LibraryM.Application.Books;
@@ -10,9 +11,11 @@ using LibraryM.Application.Reservations;
 using LibraryM.Application.Transactions;
 using LibraryM.Application.Users;
 using LibraryM.Infrastructure.Authentication;
+using LibraryM.Infrastructure.Payments;
 using LibraryM.Infrastructure.Persistence;
 using LibraryM.Infrastructure.Persistence.Repositories;
 using LibraryM.Infrastructure.Security;
+using LibraryM.WebApi.Configuration;
 using LibraryM.WebApi.HostedServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -24,17 +27,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
+builder.Configuration.AddOptionalDotEnv(Path.Combine(builder.Environment.ContentRootPath, ".env"));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=library.db";
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
     ?? throw new InvalidOperationException("JWT configuration is missing.");
 var librarySettings = builder.Configuration.GetSection(LibrarySettings.SectionName).Get<LibrarySettings>() ?? new LibrarySettings();
 var defaultAdminOptions = builder.Configuration.GetSection(DefaultAdminOptions.SectionName).Get<DefaultAdminOptions>() ?? new DefaultAdminOptions();
+var stripeOptions = builder.Configuration.GetSection(StripeOptions.SectionName).Get<StripeOptions>() ?? new StripeOptions();
 var dataProtectionPath = Path.Combine(builder.Environment.ContentRootPath, ".keys");
 
 builder.Services.AddSingleton(jwtOptions);
 builder.Services.AddSingleton(librarySettings);
 builder.Services.AddSingleton(defaultAdminOptions);
+builder.Services.AddSingleton(stripeOptions);
 builder.Services.AddDbContext<LibraryContext>(options => options.UseSqlite(connectionString));
 // Keep app keys inside the project so local runs do not depend on the machine-level profile folder.
 builder.Services.AddDataProtection()
@@ -46,10 +52,12 @@ builder.Services.AddScoped<IBookRepository, BookRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ILoanRepository, LoanRepository>();
 builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
+builder.Services.AddScoped<IFineChargeRepository, FineChargeRepository>();
 builder.Services.AddScoped<IFinePaymentRepository, FinePaymentRepository>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IFineCheckoutGateway, StripeFineCheckoutGateway>();
 builder.Services.AddScoped<IBookService, BookService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();

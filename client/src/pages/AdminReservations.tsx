@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getStoredRole, isLoggedIn, isStaffRole } from "../lib/session";
+import { extractApiMessage, notifyError, notifySuccess } from "../lib/notifications";
 import api from "../services/axiosConfig";
 import type { Reservation } from "../types/library";
 
@@ -28,7 +29,7 @@ function AdminReservations() {
         );
       })
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to load reservations.");
+        notifyError(extractApiMessage(error, "Failed to load reservations."));
       })
       .finally(() => setIsLoading(false));
   };
@@ -51,10 +52,7 @@ function AdminReservations() {
           response.data.filter((reservation) => reservation.status === "Active" || reservation.status === "Available"),
         );
       } catch (error: unknown) {
-        const message = typeof error === "object" && error && "response" in error
-          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
-          : undefined;
-        alert(message ?? "Failed to load reservations.");
+        notifyError(extractApiMessage(error, "Failed to load reservations."));
       } finally {
         setIsLoading(false);
       }
@@ -73,13 +71,13 @@ function AdminReservations() {
     // Staff choose the real loan period only when the member actually collects the reservation.
     api.post(`/Reservations/${reservationToIssue.id}/issue`, { borrowDays })
       .then(() => {
-        alert("Reservation issued successfully.");
+        notifySuccess("Reservation issued successfully.");
         setReservationToIssue(null);
         setBorrowDays(14);
         loadReservations();
       })
       .catch((error) => {
-        alert(error.response?.data?.message ?? "Failed to issue reservation.");
+        notifyError(extractApiMessage(error, "Failed to issue reservation."));
       })
       .finally(() => setIsSubmitting(false));
   };

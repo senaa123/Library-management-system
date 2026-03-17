@@ -1,4 +1,5 @@
 import { Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import BookList from "./pages/BookList";
 import AddBook from "./pages/AddBook";
 import EditBook from "./pages/EditBook";
@@ -6,12 +7,16 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyBorrowedBooks from "./pages/MyBorrowedBooks";
 import MyReservations from "./pages/MyReservations";
+import MyFines from "./pages/MyFines";
 import AdminLoans from "./pages/AdminLoans";
 import AdminReservations from "./pages/AdminReservations";
 import StaffBookSection from "./pages/StaffBookSection";
 import Members from "./pages/Members";
 import MemberDetails from "./pages/MemberDetails";
+import ToastViewport from "./components/ToastViewport";
 import { getStoredRole, isLoggedIn, isStaffRole } from "./lib/session";
+import api from "./services/axiosConfig";
+import type { UserProfile } from "./types/library";
 
 function App() {
   const navigate = useNavigate();
@@ -21,6 +26,20 @@ function App() {
   const role = getStoredRole();
   const displayName = localStorage.getItem("fullName") ?? username;
   const isStaff = isStaffRole(role);
+  const [memberProfile, setMemberProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (!loggedIn || isStaff) {
+      return;
+    }
+
+    // We show the live restriction banner at the app shell level so members see it on every screen.
+    void api.get<UserProfile>("/Users/me")
+      .then((response) => setMemberProfile(response.data))
+      .catch(() => {
+        setMemberProfile(null);
+      });
+  }, [isStaff, location.pathname, loggedIn]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -29,6 +48,7 @@ function App() {
     localStorage.removeItem("userId");
     localStorage.removeItem("fullName");
     localStorage.removeItem("qrCodeValue");
+    setMemberProfile(null);
     navigate("/login");
   };
 
@@ -61,6 +81,17 @@ function App() {
                 }`}
               >
                 My Reservations
+              </Link>
+            )}
+
+            {loggedIn && !isStaff && (
+              <Link
+                to="/fines"
+                className={`rounded-xl px-4 py-2 font-medium transition ${
+                  location.pathname === "/fines" ? "bg-white text-slate-900" : "text-slate-200 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                My Fines
               </Link>
             )}
 
@@ -161,11 +192,33 @@ function App() {
 
       <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(15,118,110,0.16),_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#eff6ff_48%,_#f8fafc_100%)] px-6 py-8">
         <div className="mx-auto max-w-7xl">
+          {loggedIn && !isStaff && memberProfile?.restrictionWarning && (
+            <div className={`mb-6 rounded-3xl border px-6 py-5 shadow-lg ${
+              memberProfile.isCirculationBlocked
+                ? "border-rose-200 bg-rose-50 text-rose-800"
+                : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em]">Member Warning</p>
+                  <p className="mt-2 text-base font-semibold">{memberProfile.restrictionWarning}</p>
+                </div>
+                <Link
+                  to="/fines"
+                  className="rounded-xl border border-current px-4 py-2 font-semibold transition hover:bg-white/40"
+                >
+                  Review fines
+                </Link>
+              </div>
+            </div>
+          )}
+
           <Routes>
             <Route path="/" element={<BookList />} />
             <Route path="/add" element={<AddBook />} />
             <Route path="/edit/:id" element={<EditBook />} />
             <Route path="/reservations" element={<MyReservations />} />
+            <Route path="/fines" element={<MyFines />} />
             <Route path="/borrowed" element={<MyBorrowedBooks />} />
             <Route path="/staff/books" element={<StaffBookSection />} />
             <Route path="/staff/reservations" element={<AdminReservations />} />
@@ -195,6 +248,8 @@ function App() {
           </div>
         </div>
       </footer>
+
+      <ToastViewport />
     </>
   );
 }
