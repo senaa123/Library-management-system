@@ -133,8 +133,3 @@ Stripe__SecretKey=sk_test_xxx
 4. Add books and members.
 5. Use the staff views to issue books, manage reservations, record returns, and handle fines.
 
-## Developer
-
-EM Binada Pasandul
-
-This project was created as part of a software engineering internship assignment and expanded into a full library circulation management system.
